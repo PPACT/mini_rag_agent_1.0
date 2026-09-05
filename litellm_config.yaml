@@ -1,0 +1,15 @@
+# LiteLLM 路由配置（后期切换云端模型只改这里，业务代码不动）
+# 当前：LLM 走 DeepSeek 云 API；Embedding 走本地 Ollama（不经过 LiteLLM，直连 /api/embed）
+
+model_list:
+  - model_name: deepseek-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+      api_base: https://api.deepseek.com
+      temperature: 0.1
+      max_tokens: 2048
+
+general_settings:
+  request_timeout: 60
+  num_retries: 2

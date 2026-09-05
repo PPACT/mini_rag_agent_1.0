@@ -1,0 +1,37 @@
+# ---- Web ----
+fastapi
+uvicorn
+# uvicorn[standard]  # 可选（Windows 下 uvloop 不支持，用纯 asyncio 即可）
+
+# ---- 配置 ----
+pydantic
+pydantic-settings
+
+# ---- 数据库（PostgreSQL + pgvector）----
+asyncpg
+pgvector
+
+# ---- 缓存 / 异步任务 ----
+redis
+arq
+
+# ---- HTTP（Ollama 直连）----
+httpx
+
+# ---- LLM 网关 ----
+litellm
+
+# ---- Agent / MCP ----
+langgraph
+langchain-core
+langchain-mcp-adapters
+mcp
+
+# ---- 文档解析（免费）----
+pdfplumber
+python-docx
+python-pptx
+
+# ---- 可观测（占位，需要时取消注释）----
+# opentelemetry-api
+# opentelemetry-sdk

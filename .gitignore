@@ -1,0 +1,42 @@
+# ===== 密钥与环境（绝不提交到公共网络）=====
+.env
+.env.*
+!.env.example
+
+# ===== 本地环境约定 / AI 助手配置（隐私，不上传）=====
+CLAUDE.md
+.claude/
+
+# ===== IDE 本地配置 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== 数据 / 上传文件 =====
+data/
+uploads/
+*.pdf
+*.docx
+*.pptx
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# ===== 日志 / 系统杂项 =====
+*.log
+logs/
+.DS_Store
+Thumbs.db

@@ -6,8 +6,7 @@ from pydantic import BaseModel
 
 class ChatRequest(BaseModel):
     question: str
-    departments: list[str] | None = None   # 模拟当前用户部门
-    secret_level: int | None = None        # 模拟当前用户密级
+    # 注意：department / secret_level 不再由客户端传入，改由服务端从鉴权 token 解析。
 
 
 class Source(BaseModel):

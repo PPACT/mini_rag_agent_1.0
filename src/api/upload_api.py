@@ -42,8 +42,21 @@ async def upload_document(
     os.makedirs(settings.upload_dir_abs, exist_ok=True)
     filename = f"{uuid.uuid4().hex}.{ext}"
     dest = os.path.join(settings.upload_dir_abs, filename)
+
+    # 流式写盘 + 大小限制（避免大文件一次性读入内存 OOM）
+    written = 0
+    too_large = False
     with open(dest, "wb") as f:
-        f.write(await file.read())
+        while chunk := await file.read(1024 * 1024):
+            written += len(chunk)
+            if written > settings.max_upload_size:
+                too_large = True
+                break
+            f.write(chunk)
+    if too_large:
+        os.remove(dest)
+        limit_mb = settings.max_upload_size // (1024 * 1024)
+        raise HTTPException(status_code=413, detail=f"文件超过大小限制 {limit_mb}MB")
 
     pool = await get_pool()
     doc_id = await pool.fetchval(

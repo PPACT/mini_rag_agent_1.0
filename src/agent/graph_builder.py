@@ -18,6 +18,8 @@ def _build_model() -> ChatOpenAI:
         openai_api_key=s.deepseek_api_key,
         openai_api_base=s.deepseek_base_url,
         temperature=0.1,
+        request_timeout=60,  # 请求超时（秒）
+        max_retries=3,       # 失败自动重试
     )
 
 

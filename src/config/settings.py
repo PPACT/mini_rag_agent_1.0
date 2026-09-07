@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     # 应用
     upload_dir: str = "./data/uploads"
+    max_upload_size: int = 50 * 1024 * 1024  # 上传大小上限（默认 50MB）
     chunk_size: int = 512
     chunk_overlap: int = 64
     top_k: int = 5

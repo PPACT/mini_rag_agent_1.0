@@ -19,5 +19,6 @@ async def complete(messages: list[dict], temperature: float = 0.1) -> str:
         api_base=settings.deepseek_base_url,
         temperature=temperature,
         max_tokens=2048,
+        timeout=60,  # 请求超时（秒）
     )
     return resp.choices[0].message.content or ""

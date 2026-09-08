@@ -10,6 +10,8 @@ pydantic-settings
 # ---- 数据库（PostgreSQL + pgvector）----
 asyncpg
 pgvector
+alembic
+psycopg2-binary
 
 # ---- 缓存 / 异步任务 ----
 redis

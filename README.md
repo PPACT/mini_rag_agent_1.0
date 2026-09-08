@@ -24,8 +24,8 @@
 2. **Ollama + 模型**：`ollama serve` 后 `ollama pull bge-m3`
 3. **建表 + 起服务**：
    ```bash
-   # 建表（documents / chunks 向量表）
-   psql "postgresql://rag:rag_demo_pwd@localhost:5432/rag_demo" -f src/db/init_db.sql
+   # 建表（用 Alembic 迁移）
+   alembic upgrade head
    # 起 API（PYTHONIOENCODING 让日志中文不乱码）
    PYTHONIOENCODING=utf-8 python -m uvicorn src.main:app
    # 起 Arq worker（另开终端）

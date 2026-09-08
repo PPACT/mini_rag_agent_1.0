@@ -19,8 +19,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: rag_demo_redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
     ports:
       - "6379:6379"
+    mem_limit: 512m
     volumes:
       - redisdata:/data
     healthcheck:

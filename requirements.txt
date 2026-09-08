@@ -23,7 +23,9 @@ litellm
 
 # ---- Agent / MCP ----
 langgraph
+langchain
 langchain-core
+langchain-openai
 langchain-mcp-adapters
 mcp
 

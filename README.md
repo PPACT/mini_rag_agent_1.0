@@ -47,3 +47,12 @@
 - 依赖锁定：`requirements.txt`（宽松手写）→ `requirements.lock`（锁定版本，用 `uv pip compile requirements.txt -o requirements.lock` 重新生成）。
 - `VECTOR_STORE` 支持 `pgvector`（默认）/ `milvus`（占位桩），后期迁移 Milvus 只改配置。
 - 文档上传、问答、软删等接口见 `src/api/`。
+
+## 测试
+
+单元测试（切块逻辑、AccessFilter→SQL 翻译）在 `tests/` 下，运行：
+
+```bash
+uv pip install pytest
+PYTHONPATH=. python -m pytest tests/ -v
+```

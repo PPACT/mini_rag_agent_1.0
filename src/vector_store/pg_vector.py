@@ -15,10 +15,11 @@ class PgVectorStore(VectorStore):
     def _vec_str(embedding: list[float]) -> str:
         return "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
 
-    async def search(self, embedding: list[float], filters: AccessFilter, top_k: int) -> list[Chunk]:
-        pool = await get_pool()
+    @staticmethod
+    def _build_search_sql(vec_str: str, filters: AccessFilter, top_k: int) -> tuple[str, list]:
+        """构建检索 SQL 与参数（纯函数，便于单测 AccessFilter→SQL 翻译）。"""
         conds = ["d.is_deleted = false"]
-        params: list = [self._vec_str(embedding)]
+        params: list = [vec_str]
         n = 2
         if filters.departments:
             conds.append(f"c.department = ANY(${n})")
@@ -40,6 +41,11 @@ class PgVectorStore(VectorStore):
             LIMIT ${n}
         """
         params.append(top_k)
+        return sql, params
+
+    async def search(self, embedding: list[float], filters: AccessFilter, top_k: int) -> list[Chunk]:
+        pool = await get_pool()
+        sql, params = self._build_search_sql(self._vec_str(embedding), filters, top_k)
         rows = await pool.fetch(sql, *params)
         return [
             Chunk(

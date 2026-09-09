@@ -62,12 +62,12 @@ async def upload_document(
     pool = await get_pool()
     if document_id:
         # 更新已有文档：版本号 +1，替换 chunk（worker 会删旧插新）
-        updated = await pool.execute(
+        updated_id = await pool.fetchval(
             "UPDATE documents SET filename=$2, version=version+1, status='pending', error=NULL, updated_at=now() "
-            "WHERE id=$1::uuid AND is_deleted=false",
+            "WHERE id=$1::uuid AND is_deleted=false RETURNING id::text",
             document_id, filename,
         )
-        if updated == "UPDATE 0":
+        if updated_id is None:
             os.remove(dest)
             raise HTTPException(status_code=404, detail="文档不存在或已删除")
         doc_id = document_id

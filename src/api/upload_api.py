@@ -21,12 +21,13 @@ _ALLOWED = {"pdf", "docx", "doc", "pptx", "ppt"}
 async def upload_document(
     file: UploadFile = File(...),
     secret_level: int = Form(0),
+    document_id: str | None = Form(None),
     user: User = Depends(get_current_user),
 ) -> UploadResponse:
     """上传文档：落盘 -> 写 documents(pending) -> 入队异步处理。
 
     department 取自鉴权 token（服务端身份）；secret_level 为文档密级（表单），
-    校验不能超过上传者自己的密级。
+    校验不能超过上传者自己的密级。传 document_id 则更新已有文档（version+1 替换 chunk）。
     """
     settings = get_settings()
     ext = file.filename.lower().rsplit(".", 1)[-1] if "." in (file.filename or "") else ""
@@ -59,9 +60,21 @@ async def upload_document(
         raise HTTPException(status_code=413, detail=f"文件超过大小限制 {limit_mb}MB")
 
     pool = await get_pool()
-    doc_id = await pool.fetchval(
-        "INSERT INTO documents (filename, status) VALUES ($1, 'pending') RETURNING id::text", filename
-    )
+    if document_id:
+        # 更新已有文档：版本号 +1，替换 chunk（worker 会删旧插新）
+        updated = await pool.execute(
+            "UPDATE documents SET filename=$2, version=version+1, status='pending', error=NULL, updated_at=now() "
+            "WHERE id=$1::uuid AND is_deleted=false",
+            document_id, filename,
+        )
+        if updated == "UPDATE 0":
+            os.remove(dest)
+            raise HTTPException(status_code=404, detail="文档不存在或已删除")
+        doc_id = document_id
+    else:
+        doc_id = await pool.fetchval(
+            "INSERT INTO documents (filename, status) VALUES ($1, 'pending') RETURNING id::text", filename
+        )
     await enqueue_process_document(doc_id, user.department, secret_level)
     return UploadResponse(document_id=doc_id, status="pending")
 

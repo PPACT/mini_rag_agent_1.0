@@ -30,25 +30,28 @@ async def process_document(ctx: dict, document_id: str, department: str | None =
         file_path = os.path.join(settings.upload_dir_abs, row["filename"])
         text = load_text(file_path)
 
-        chunks_text = split_text(text, settings.chunk_size, settings.chunk_overlap)
-        if not chunks_text:
+        text_chunks = split_text(text, settings.chunk_size, settings.chunk_overlap)
+        if not text_chunks:
             raise ValueError("解析后无有效文本")
 
         embedding = get_embedding()
-        vectors = await embedding.embed(chunks_text)
+        vectors = await embedding.embed([tc.text for tc in text_chunks])
 
         version = row["version"]
         chunk_objs = [
             Chunk(
                 document_id=document_id,
                 chunk_index=i,
-                content=t,
+                content=tc.text,
                 source_file=row["filename"],
                 document_version=version,
                 department=department,
                 secret_level=secret_level,
+                start_offset=tc.start,
+                end_offset=tc.end,
+                title=tc.title,
             )
-            for i, t in enumerate(chunks_text)
+            for i, tc in enumerate(text_chunks)
         ]
 
         store = get_vector_store()
@@ -57,7 +60,7 @@ async def process_document(ctx: dict, document_id: str, department: str | None =
         await pool.execute(
             "UPDATE documents SET status='completed', chunk_count=$2, updated_at=now() WHERE id=$1::uuid",
             document_id,
-            len(chunks_text),
+            len(text_chunks),
         )
         await invalidate_cache()
     except Exception as e:  # noqa: BLE001

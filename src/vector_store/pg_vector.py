@@ -18,7 +18,7 @@ class PgVectorStore(VectorStore):
     @staticmethod
     def _build_search_sql(vec_str: str, filters: AccessFilter, top_k: int) -> tuple[str, list]:
         """构建检索 SQL 与参数（纯函数，便于单测 AccessFilter→SQL 翻译）。"""
-        conds = ["d.is_deleted = false"]
+        conds = ["d.is_deleted = false", "c.is_deprecated = false"]
         params: list = [vec_str]
         n = 2
         if filters.departments:
@@ -33,6 +33,7 @@ class PgVectorStore(VectorStore):
         sql = f"""
             SELECT c.id::text, c.document_id::text, c.chunk_index, c.content,
                    c.source_file, c.department, c.secret_level,
+                   c.start_offset, c.end_offset, c.title,
                    (1 - (c.embedding <=> $1::vector)) AS score
             FROM chunks c
             JOIN documents d ON d.id = c.document_id
@@ -56,6 +57,9 @@ class PgVectorStore(VectorStore):
                 source_file=r["source_file"],
                 department=r["department"],
                 secret_level=r["secret_level"],
+                start_offset=r["start_offset"],
+                end_offset=r["end_offset"],
+                title=r["title"],
                 score=float(r["score"]),
             )
             for r in rows
@@ -71,8 +75,9 @@ class PgVectorStore(VectorStore):
                     await conn.execute(
                         """
                         INSERT INTO chunks (document_id, chunk_index, document_version,
-                                            content, embedding, department, secret_level, source_file)
-                        VALUES ($1::uuid, $2, $3, $4, $5::vector, $6, $7, $8)
+                                            content, embedding, department, secret_level, source_file,
+                                            start_offset, end_offset, title)
+                        VALUES ($1::uuid, $2, $3, $4, $5::vector, $6, $7, $8, $9, $10, $11)
                         """,
                         chunk.document_id,
                         chunk.chunk_index,
@@ -82,6 +87,9 @@ class PgVectorStore(VectorStore):
                         chunk.department,
                         chunk.secret_level,
                         chunk.source_file,
+                        chunk.start_offset,
+                        chunk.end_offset,
+                        chunk.title,
                     )
 
     async def delete_by_document(self, document_id: str) -> None:

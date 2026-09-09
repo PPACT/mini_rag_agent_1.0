@@ -24,6 +24,10 @@ class Chunk:
     secret_level: int = 0
     source_file: str | None = None
     document_version: int = 1
+    start_offset: int | None = None
+    end_offset: int | None = None
+    title: str | None = None
+    is_deprecated: bool = False
     id: str | None = None          # 检索结果回填；写入时为空
     score: float = 0.0             # 相似度（检索结果）
 

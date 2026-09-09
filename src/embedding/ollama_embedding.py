@@ -1,4 +1,4 @@
-"""本地 Ollama embedding 实现（直连 /api/embed，RTX 4060 CUDA）。"""
+"""本地 Ollama embedding 实现（直连 /api/embed，CUDA）。"""
 from __future__ import annotations
 
 import httpx
@@ -18,6 +18,7 @@ class OllamaEmbedding(BaseEmbedding):
         self._base_url = settings.ollama_base_url
         self._model = settings.embedding_model
         self._batch_size = settings.embedding_batch_size
+        self._dim = settings.embedding_dim
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         result: list[list[float]] = []
@@ -33,4 +34,9 @@ class OllamaEmbedding(BaseEmbedding):
             json={"model": self._model, "input": texts},
         )
         resp.raise_for_status()
-        return resp.json().get("embeddings", [])
+        embeddings = resp.json().get("embeddings", [])
+        if embeddings and len(embeddings[0]) != self._dim:
+            raise ValueError(
+                f"embedding 维度不匹配：模型返回 {len(embeddings[0])} 维，配置 EMBEDDING_DIM={self._dim}"
+            )
+        return embeddings

@@ -5,6 +5,8 @@ Revises: (无)
 """
 from alembic import op
 
+from src.config.settings import get_settings
+
 revision = "0001"
 down_revision = None
 branch_labels = None
@@ -12,6 +14,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    dim = get_settings().embedding_dim
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
     op.execute(
@@ -32,14 +35,14 @@ def upgrade() -> None:
     )
 
     op.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS chunks (
             id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             document_id      UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
             chunk_index      INTEGER NOT NULL,
             document_version INTEGER NOT NULL DEFAULT 1,
             content          TEXT NOT NULL,
-            embedding        vector(1024),
+            embedding        vector({dim}),
             department       TEXT,
             secret_level     INTEGER NOT NULL DEFAULT 0,
             source_file      TEXT,

@@ -1,10 +1,11 @@
-# LiteLLM 路由配置（后期切换云端模型只改这里，业务代码不动）
+# LiteLLM 路由配置（文档/示例：实际 LLM 经 langchain ChatOpenAI 调用，见 src/agent/graph_builder.py）
+# ⚠️ 模型名需与 .env 的 DEEPSEEK_MODEL 保持一致，避免过期。
 # 当前：LLM 走 DeepSeek 云 API；Embedding 走本地 Ollama（不经过 LiteLLM，直连 /api/embed）
 
 model_list:
-  - model_name: deepseek-chat
+  - model_name: deepseek-v4-flash
     litellm_params:
-      model: deepseek/deepseek-chat
+      model: deepseek/deepseek-v4-flash
       api_key: os.environ/DEEPSEEK_API_KEY
       api_base: https://api.deepseek.com
       temperature: 0.1

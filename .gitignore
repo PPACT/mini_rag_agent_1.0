@@ -6,6 +6,7 @@
 # ===== 本地环境约定 / AI 助手配置（隐私，不上传）=====
 CLAUDE.md
 改进计划.md
+RAG生产化回顾.md
 docs/评估报告.md
 .claude/
 

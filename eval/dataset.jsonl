@@ -1,0 +1,20 @@
+{"id": 1, "question": "我迟到了会怎么样？", "source": "hr_attendance.md", "answer_span": "迟到 30 分钟以内记警告一次", "type": "colloquial"}
+{"id": 2, "question": "出差住酒店能报多少？", "source": "finance_reimbursement.md", "answer_span": "一线城市每晚上限 600 元", "type": "colloquial"}
+{"id": 3, "question": "密码多久要换一次？", "source": "security_policy.md", "answer_span": "每 90 天强制更换一次", "type": "colloquial"}
+{"id": 4, "question": "新来的多久能转正？", "source": "onboarding.md", "answer_span": "试用期为 3 个月", "type": "colloquial"}
+{"id": 5, "question": "上线出问题了怎么办？", "source": "product_release.md", "answer_span": "5 分钟内完成", "type": "colloquial"}
+{"id": 6, "question": "加班攒的假能放多久？", "source": "it_leave.md", "answer_span": "有效期为 3 个月，过期作废", "type": "colloquial"}
+{"id": 7, "question": "忘记打卡了怎么办？", "source": "hr_attendance.md", "answer_span": "每月补卡上限为 3 次", "type": "colloquial"}
+{"id": 8, "question": "请客户吃饭报销额度是多少？", "source": "finance_reimbursement.md", "answer_span": "人均标准不超过 200 元", "type": "colloquial"}
+{"id": 9, "question": "公司年假有多少天？", "source": "it_leave.md", "answer_span": "入职满一年享有 5 天", "type": "well_phrased"}
+{"id": 10, "question": "全勤奖是多少钱？", "source": "hr_attendance.md", "answer_span": "500 元全勤奖", "type": "well_phrased"}
+{"id": 11, "question": "电子发票要怎么处理？", "source": "finance_reimbursement.md", "answer_span": "电子发票需打印后粘贴", "type": "well_phrased"}
+{"id": 12, "question": "公司数据分几个级别？", "source": "security_policy.md", "answer_span": "分为公开、内部、机密、绝密四个级别", "type": "well_phrased"}
+{"id": 13, "question": "入职需要携带哪些材料？", "source": "onboarding.md", "answer_span": "一寸照片两张", "type": "well_phrased"}
+{"id": 14, "question": "发布前需要满足什么条件？", "source": "product_release.md", "answer_span": "单元测试覆盖率不低于 70%", "type": "well_phrased"}
+{"id": 15, "question": "灰度发布的比例是多少？", "source": "product_release.md", "answer_span": "5% 用户灰度 24 小时", "type": "well_phrased"}
+{"id": 16, "question": "调休申请怎么走流程？", "source": "it_leave.md", "answer_span": "调休申请与请假流程一致", "type": "well_phrased"}
+{"id": 17, "question": "公司电脑有什么安全要求？", "source": "security_policy.md", "answer_span": "必须开启全盘加密和屏幕锁", "type": "well_phrased"}
+{"id": 18, "question": "报销多久之内要提交？", "source": "finance_reimbursement.md", "answer_span": "30 天内提交", "type": "well_phrased"}
+{"id": 19, "question": "新员工要完成哪些培训？", "source": "onboarding.md", "answer_span": "公司制度培训、信息安全培训和岗位技能培训", "type": "well_phrased"}
+{"id": 20, "question": "值班是怎么安排的？", "source": "it_leave.md", "answer_span": "7×24 轮值", "type": "well_phrased"}

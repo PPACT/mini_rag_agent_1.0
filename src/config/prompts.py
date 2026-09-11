@@ -8,7 +8,17 @@ import yaml
 _PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "rag_system.yaml"
 
 
+def _load(section: str) -> dict:
+    return yaml.safe_load(_PROMPT_PATH.read_text(encoding="utf-8"))[section]
+
+
 def load_templates() -> tuple[str, str]:
-    """返回 (system, human) 提示词模板。"""
-    data = yaml.safe_load(_PROMPT_PATH.read_text(encoding="utf-8"))["rag_prompt"]
+    """返回 RAG (system, human) 提示词模板。"""
+    data = _load("rag_prompt")
+    return data["system"], data["human"]
+
+
+def load_rewrite_templates() -> tuple[str, str]:
+    """返回多查询扩展 (system, human) 提示词模板。"""
+    data = _load("query_rewrite")
     return data["system"], data["human"]

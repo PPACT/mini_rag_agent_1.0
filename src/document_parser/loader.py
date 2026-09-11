@@ -11,7 +11,15 @@ def load_text(file_path: str) -> str:
         return _load_docx(file_path)
     if ext in ("pptx", "ppt"):
         return _load_pptx(file_path)
+    if ext in ("md", "txt"):
+        return _load_plain(file_path)
     raise ValueError(f"不支持的文件类型: {ext}")
+
+
+def _load_plain(path: str) -> str:
+    """纯文本/Markdown（约定 UTF-8 编码）。"""
+    with open(path, encoding="utf-8") as f:
+        return f.read()
 
 
 def _load_pdf(path: str) -> str:

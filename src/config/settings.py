@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     top_k: int = 5
     cache_ttl: int = 3600
 
+    # 多查询扩展（Query Rewriting）
+    query_rewrite_enabled: bool = True
+    query_rewrite_count: int = 3       # 生成的改写变体数（不含原问题）
+    rrf_k: int = 60                    # RRF 融合常数
+
     @property
     def upload_dir_abs(self) -> str:
         """上传目录绝对路径（upload_dir 相对路径以项目根为基准）。"""

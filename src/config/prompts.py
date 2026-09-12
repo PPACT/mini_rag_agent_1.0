@@ -22,3 +22,9 @@ def load_rewrite_templates() -> tuple[str, str]:
     """返回多查询扩展 (system, human) 提示词模板。"""
     data = _load("query_rewrite")
     return data["system"], data["human"]
+
+
+def load_rerank_templates() -> tuple[str, str]:
+    """返回精排 (system, human) 提示词模板。"""
+    data = _load("rerank")
+    return data["system"], data["human"]

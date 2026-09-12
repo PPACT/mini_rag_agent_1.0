@@ -1,9 +1,10 @@
-"""RAG 检索：多查询扩展 + 向量检索 + RRF 融合 + 权限过滤。"""
+"""RAG 检索：多查询扩展 → 向量粗排 → RRF 融合 → 精排(Rerank) → 权限过滤。"""
 from __future__ import annotations
 
 from src.config.settings import get_settings
 from src.embedding.base import get_embedding
 from src.rag.query_rewriter import expand_queries
+from src.rag.reranker import get_reranker
 from src.vector_store.base import AccessFilter, Chunk, get_vector_store
 
 
@@ -38,18 +39,23 @@ async def retrieve(
     secret_level: int | None,
     *,
     use_rewrite: bool | None = None,
+    use_rerank: bool | None = None,
     top_k: int | None = None,
 ) -> tuple[str, list[Chunk]]:
-    """检索：多查询扩展 → 各路向量检索 → RRF 融合 → 返回 (上下文文本, 命中切片)。
+    """两段式检索：粗排召回 → 精排 → 返回 (上下文文本, 命中切片)。
 
-    use_rewrite=None 时读配置；显式传 False 可跑基线（评测对比用）。
-    top_k=None 时读配置；评测可传更大值以观察完整排序。
+    各开关 None 时读配置；显式传 False 可跑基线（评测对比用）。
     """
     settings = get_settings()
     if use_rewrite is None:
         use_rewrite = settings.query_rewrite_enabled
+    if use_rerank is None:
+        use_rerank = settings.rerank_enabled
     if top_k is None:
         top_k = settings.top_k
+
+    # 粗排召回数：开启精排则放大召回，给精排留出挑选空间
+    recall_k = max(top_k, settings.rerank_candidates) if use_rerank else top_k
 
     queries = [question]
     if use_rewrite:
@@ -61,11 +67,17 @@ async def retrieve(
     store = get_vector_store()
     filters = AccessFilter(departments=departments, secret_level_le=secret_level)
 
-    ranked_lists = [await store.search(vec, filters, top_k) for vec in query_vectors]
+    ranked_lists = [await store.search(vec, filters, recall_k) for vec in query_vectors]
 
     if len(ranked_lists) == 1:
-        chunks = ranked_lists[0]
+        candidates = ranked_lists[0]
     else:
-        chunks = rrf_merge(ranked_lists, settings.rrf_k)[:top_k]
+        candidates = rrf_merge(ranked_lists, settings.rrf_k)[:recall_k]
+
+    # 精排：用更强的判断力纠正"语义相近但答非所问"
+    if use_rerank and len(candidates) > top_k:
+        chunks = await get_reranker().rerank(question, candidates, top_k)
+    else:
+        chunks = candidates[:top_k]
 
     return format_context(chunks), chunks

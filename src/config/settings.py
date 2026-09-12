@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     query_rewrite_count: int = 3       # 生成的改写变体数（不含原问题）
     rrf_k: int = 60                    # RRF 融合常数
 
+    # 两段式检索：粗排召回 → 精排（Rerank）
+    rerank_enabled: bool = True
+    rerank_candidates: int = 20        # 粗排召回的候选数（精排后取 top_k）
+    rerank_snippet_chars: int = 300    # 送进精排时每条的截断长度（控成本）
+
     @property
     def upload_dir_abs(self) -> str:
         """上传目录绝对路径（upload_dir 相对路径以项目根为基准）。"""

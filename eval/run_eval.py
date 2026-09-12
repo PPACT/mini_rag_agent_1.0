@@ -42,10 +42,15 @@ def load_dataset() -> list[dict]:
     return rows
 
 
-def first_hit_rank(chunks: list[Chunk], answer_span: str) -> int | None:
-    """返回首个包含答案片段的切片排名（1-based）；未命中返回 None。"""
+def first_hit_rank(chunks: list[Chunk], answer_span: str, source_file: str) -> int | None:
+    """返回首个命中的切片排名（1-based）；未命中返回 None。
+
+    命中 = 来自**期望的文档** 且 内容包含答案片段。
+    校验 source_file 是必要的：语料里有同主题的其他文档（部门变体、相近主题），
+    只看内容会把"别人的版本"误判为命中。
+    """
     for rank, c in enumerate(chunks, start=1):
-        if answer_span in c.content:
+        if c.source_file == source_file and answer_span in c.content:
             return rank
     return None
 
@@ -56,7 +61,7 @@ async def rank_all(dataset: list[dict], top: int, **kw) -> list[int | None]:
         _, chunks = await retrieve(
             row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, top_k=top, **kw
         )
-        ranks.append(first_hit_rank(chunks, row["answer_span"]))
+        ranks.append(first_hit_rank(chunks, row["answer_span"], row["source"]))
     return ranks
 
 

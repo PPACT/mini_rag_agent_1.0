@@ -20,6 +20,8 @@ docs/评估报告.md
 # ===== 数据 / 上传文件 =====
 data/
 uploads/
+# 合成评测语料（由 eval/gen_synth.py 生成，可重建）
+eval/corpus_synth/
 *.pdf
 *.docx
 *.pptx

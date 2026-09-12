@@ -20,6 +20,7 @@ from src.embedding.base import get_embedding  # noqa: E402
 from src.vector_store.base import Chunk, get_vector_store  # noqa: E402
 
 CORPUS_DIR = Path(__file__).resolve().parent / "corpus"
+SYNTH_DIR = Path(__file__).resolve().parent / "corpus_synth"
 EVAL_DEPARTMENT = "IT"
 EVAL_SECRET_LEVEL = 3
 
@@ -30,15 +31,29 @@ def doc_id_for(filename: str) -> str:
 
 
 async def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exclude-dept", action="store_true", help="不灌部门变体（隔离规模 vs 近重复两个因素）")
+    args = parser.parse_args()
+    exclude_dept = args.exclude_dept
+
     settings = get_settings()
     pool = await get_pool()
     store = get_vector_store()
     embedding = get_embedding()
 
-    files = sorted(p for p in CORPUS_DIR.glob("*") if p.suffix.lower() in (".md", ".txt"))
-    print(f"发现 {len(files)} 篇评测语料")
+    files: list[Path] = []
+    for d in (CORPUS_DIR, SYNTH_DIR):
+        if d.exists():
+            files.extend(sorted(p for p in d.glob("*") if p.suffix.lower() in (".md", ".txt")))
+    if exclude_dept:
+        # 只剔除"部门变体"（文件名以 dept 开头），保留 LLM 生成的不同主题文档
+        files = [p for p in files if not p.name.startswith("dept")]
+    print(f"发现 {len(files)} 篇语料{'（已剔除部门变体）' if exclude_dept else '（基础 + 合成）'}")
 
-    for path in files:
+    total_chunks = 0
+    for i, path in enumerate(files, 1):
         filename = path.name
         doc_id = doc_id_for(filename)
 
@@ -49,7 +64,7 @@ async def main() -> None:
         chunk_objs = [
             Chunk(
                 document_id=doc_id,
-                chunk_index=i,
+                chunk_index=j,
                 content=c.text,
                 source_file=filename,
                 department=EVAL_DEPARTMENT,
@@ -58,7 +73,7 @@ async def main() -> None:
                 end_offset=c.end,
                 title=c.title,
             )
-            for i, c in enumerate(chunks)
+            for j, c in enumerate(chunks)
         ]
 
         await pool.execute(
@@ -75,7 +90,10 @@ async def main() -> None:
             doc_id, filename, len(chunks),
         )
         await store.replace_document(doc_id, chunk_objs, vectors)
-        print(f"  [OK] {filename}: {len(chunks)} chunks")
+        total_chunks += len(chunks)
+
+        if i % 100 == 0 or i == len(files):
+            print(f"  进度 {i}/{len(files)} 篇，累计 {total_chunks} 切片")
 
     print(f"完成，库中切片总数 {await store.count()}")
     await close_pool()

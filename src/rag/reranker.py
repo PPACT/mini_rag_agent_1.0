@@ -80,7 +80,7 @@ class LLMReranker(BaseReranker):
 class LocalCrossEncoderReranker(BaseReranker):
     """占位：本地 cross-encoder（如 bge-reranker-base）。
 
-    显存约束见 `资源规划.md`：8GB 机器上选 base 版（~1.2GB），且须支持 CPU 降级。
+    显存约束见 `docs/资源规划.md`：8GB 机器上选 base 版（~1.2GB），且须支持 CPU 降级。
     """
 
     async def rerank(self, query: str, chunks: list[Chunk], top_n: int) -> list[Chunk]:

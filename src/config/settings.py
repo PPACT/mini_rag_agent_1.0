@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     # 混合检索（向量 + 全文检索 RRF 融合，兜底"精确词"查询）
     hybrid_search_enabled: bool = True
 
+    # HNSW 检索深度。pgvector 默认 40，实测在 1231 切片时**损失 12% 召回**，
+    # 提到 100 仅多 ~3ms 即可恢复满召回 —— 默认值会静默降低检索质量。
+    hnsw_ef_search: int = 100
+
     # 歧义判定（避免"候选互相矛盾却擅自选一个"）
     ambiguity_check_enabled: bool = True
     ambiguity_source_threshold: int = 3   # top-K 来自 >=N 个不同来源才触发 LLM 判定（省调用）

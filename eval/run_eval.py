@@ -26,18 +26,19 @@ DATASET = Path(__file__).resolve().parent / "dataset_clear.jsonl"
 EVAL_DEPARTMENT = ["IT"]
 EVAL_SECRET_LEVEL = 3
 KS = (1, 3, 5)
+CONCURRENCY = 5   # 并发题数（每题含改写/精排等 LLM 调用，串行会非常慢）
 
 MODES: list[tuple[str, dict]] = [
-    ("基线", {"use_rewrite": False, "use_rerank": False}),
-    ("仅改写", {"use_rewrite": True, "use_rerank": False}),
-    ("仅精排", {"use_rewrite": False, "use_rerank": True}),
-    ("改写+精排", {"use_rewrite": True, "use_rerank": True}),
+    ("基线", {"use_rewrite": False, "use_rerank": False, "use_hybrid": False}),
+    ("+混合", {"use_rewrite": False, "use_rerank": False, "use_hybrid": True}),
+    ("改写+精排", {"use_rewrite": True, "use_rerank": True, "use_hybrid": False}),
+    ("全开(生产)", {"use_rewrite": True, "use_rerank": True, "use_hybrid": True}),
 ]
 
 
-def load_dataset() -> list[dict]:
+def load_dataset(path: Path) -> list[dict]:
     rows = []
-    with DATASET.open(encoding="utf-8") as f:
+    with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
@@ -59,13 +60,17 @@ def first_hit_rank(chunks: list[Chunk], answer_span: str, source_file: str) -> i
 
 
 async def rank_all(dataset: list[dict], top: int, **kw) -> list[int | None]:
-    ranks = []
-    for row in dataset:
-        _, chunks = await retrieve(
-            row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, top_k=top, **kw
-        )
-        ranks.append(first_hit_rank(chunks, row["answer_span"], row["source"]))
-    return ranks
+    """并发跑一批题（每题走完整检索链路，含多次 LLM 调用，串行会极慢）。"""
+    sem = asyncio.Semaphore(CONCURRENCY)
+
+    async def one(row: dict) -> int | None:
+        async with sem:
+            _, chunks = await retrieve(
+                row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, top_k=top, **kw
+            )
+        return first_hit_rank(chunks, row["answer_span"], row["source"])
+
+    return list(await asyncio.gather(*[one(r) for r in dataset]))
 
 
 def summarize(ranks: list[int | None]) -> dict:
@@ -80,6 +85,8 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--top", type=int, default=10, help="每次检索取回的切片数")
     parser.add_argument("--modes", default=None, help="逗号分隔的模式名，默认全部")
+    parser.add_argument("--dataset", default="dataset_clear.jsonl",
+                        help="数据集文件名（默认清晰题；可用 dataset_exact.jsonl 测精确词）")
     args = parser.parse_args()
 
     modes = MODES
@@ -91,8 +98,8 @@ async def main() -> None:
             print(f"未知模式: {missing}；可选: {[m[0] for m in MODES]}")
             return
 
-    dataset = load_dataset()
-    print(f"评测集 {len(dataset)} 条，每题取回 top {args.top}\n")
+    dataset = load_dataset(Path(__file__).resolve().parent / args.dataset)
+    print(f"数据集 {args.dataset}：{len(dataset)} 条，每题取回 top {args.top}\n")
 
     results: dict[str, list[int | None]] = {}
     for name, kw in modes:

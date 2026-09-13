@@ -36,6 +36,9 @@ pdfplumber
 python-docx
 python-pptx
 
+# ---- 中文分词（混合检索的词法侧：PG tsvector 不切中文，需 Python 侧分词）----
+jieba
+
 # ---- 可观测（占位，需要时取消注释）----
 # opentelemetry-api
 # opentelemetry-sdk

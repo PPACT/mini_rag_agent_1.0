@@ -12,6 +12,7 @@
 | `gen_questions.py` | 从「无变体文档」自动生成**清晰题**（含逐字答案校验） |
 | `dataset_clear.jsonl` | **清晰题**（80 条）：答案在整个语料中唯一 |
 | `dataset_clarify.jsonl` | **歧义题 + 对抗题**（37 条）：应触发澄清 |
+| `dataset_exact.jsonl` | **精确词题**（8 条）：含缩写/编号（CVSS、RTO、WPA3、`#JIRA-1234`），测混合检索 |
 | `dataset.jsonl` | 早期 20 条（现存作参考；其题目指向多版本文档，**本质是歧义题**） |
 | `ingest.py` | 把语料灌入向量库（`--exclude-dept` 可只灌无变体部分，用于隔离变量） |
 | `run_eval.py` | **检索质量**：在清晰题上跑 Recall@1/3/5 + MRR，多策略对照 |
@@ -24,6 +25,7 @@
 | **清晰题** | 答案唯一 | 检索质量 | Recall@K / MRR；**且不应触发澄清** |
 | **歧义题** | 多个同样合理的答案 | 歧义识别 | 是否触发澄清（漏报率） |
 | **对抗题** | *看似*明确、实则歧义（如"公司统一的…"） | 抗误导 | 是否触发澄清（漏报率） |
+| **精确词题** | 含缩写/编号等字面词 | 混合检索 | Recall@K / MRR（向量会糊掉字面词，词法侧能中） |
 
 > **关键**：歧义题的"标准答案"是**任意的**——用它们测召回率会失真（规模实验里 0.25 的读数就混入了这层度量假象）。
 > 所以检索指标只在**清晰题**上测。
@@ -36,7 +38,8 @@ python eval/ingest.py                    # 灌全部语料（含部门变体，~
 python eval/ingest.py --exclude-dept     # 只灌无变体部分（隔离"近重复"变量用）
 
 python eval/gen_questions.py             # 生成清晰题（需 LLM）
-python eval/run_eval.py                  # 检索质量（清晰题）
+python eval/run_eval.py                  # 检索质量（清晰题）；4 种策略对照
+python eval/run_eval.py --dataset dataset_exact.jsonl   # 精确词题（测混合检索）
 python eval/run_clarify_eval.py          # 澄清行为（漏报/误报）
 ```
 

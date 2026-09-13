@@ -58,6 +58,14 @@ class VectorStore(ABC):
         """切片总数（对账用）。"""
         raise NotImplementedError
 
+    async def search_lexical(self, query: str, filters: AccessFilter, top_k: int) -> list[Chunk]:
+        """词法检索（可选能力，用于混合检索）。
+
+        默认返回空 —— 表示该实现不支持词法检索，混合检索会自动**退化为纯向量检索**，
+        不会报错。需要混合检索的实现（如 PgVectorStore）重写此方法。
+        """
+        return []
+
 
 def get_vector_store() -> VectorStore:
     """根据 settings.vector_store 返回实现（pgvector | milvus）。"""

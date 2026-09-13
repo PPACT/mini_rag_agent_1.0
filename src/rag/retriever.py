@@ -40,9 +40,10 @@ async def retrieve(
     *,
     use_rewrite: bool | None = None,
     use_rerank: bool | None = None,
+    use_hybrid: bool | None = None,
     top_k: int | None = None,
 ) -> tuple[str, list[Chunk]]:
-    """两段式检索：粗排召回 → 精排 → 返回 (上下文文本, 命中切片)。
+    """混合检索 + 两段式：词法/向量多路粗排 → RRF 融合 → 精排 → 返回 (上下文文本, 命中切片)。
 
     各开关 None 时读配置；显式传 False 可跑基线（评测对比用）。
     """
@@ -51,6 +52,8 @@ async def retrieve(
         use_rewrite = settings.query_rewrite_enabled
     if use_rerank is None:
         use_rerank = settings.rerank_enabled
+    if use_hybrid is None:
+        use_hybrid = settings.hybrid_search_enabled
     if top_k is None:
         top_k = settings.top_k
 
@@ -67,7 +70,18 @@ async def retrieve(
     store = get_vector_store()
     filters = AccessFilter(departments=departments, secret_level_le=secret_level)
 
-    ranked_lists = [await store.search(vec, filters, recall_k) for vec in query_vectors]
+    ranked_lists: list[list[Chunk]] = []
+
+    # 词法侧（混合检索）：兜底"精确词"查询（缩写、编号、型号）
+    # 不支持的实现返回空列表，自动退化为纯向量检索
+    if use_hybrid:
+        lexical = await store.search_lexical(question, filters, recall_k)
+        if lexical:
+            ranked_lists.append(lexical)
+
+    # 向量侧（多查询扩展的每一路）
+    for vec in query_vectors:
+        ranked_lists.append(await store.search(vec, filters, recall_k))
 
     if len(ranked_lists) == 1:
         candidates = ranked_lists[0]

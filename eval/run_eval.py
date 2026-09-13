@@ -1,5 +1,8 @@
 """检索质量评测：对比多种检索策略的 Recall@K / MRR。
 
+**只跑「清晰题」**（唯一答案）——歧义题的"标准答案"是任意的，用它测召回会失真
+（歧义识别另见 `run_clarify_eval.py`）。
+
 用法（需先 python eval/ingest.py 灌语料）：
     python eval/run_eval.py                 # 跑全部模式
     python eval/run_eval.py --top 10        # 每次取回的切片数
@@ -19,7 +22,7 @@ from src.db.connection import close_pool  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 from src.vector_store.base import Chunk  # noqa: E402
 
-DATASET = Path(__file__).resolve().parent / "dataset.jsonl"
+DATASET = Path(__file__).resolve().parent / "dataset_clear.jsonl"
 EVAL_DEPARTMENT = ["IT"]
 EVAL_SECRET_LEVEL = 3
 KS = (1, 3, 5)

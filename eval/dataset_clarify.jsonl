@@ -1,0 +1,37 @@
+{"id": 2001, "kind": "ambiguous", "question": "我迟到了会怎么样？", "note": "考勤：40 个版本各不相同"}
+{"id": 2002, "kind": "ambiguous", "question": "出差住酒店能报多少？", "note": "差旅：多版本"}
+{"id": 2003, "kind": "ambiguous", "question": "密码多久要换一次？", "note": "安全：多版本"}
+{"id": 2004, "kind": "ambiguous", "question": "新来的多久能转正？", "note": "入职：多版本"}
+{"id": 2005, "kind": "ambiguous", "question": "上线出问题了怎么办？", "note": "发布：多版本"}
+{"id": 2006, "kind": "ambiguous", "question": "加班攒的假能放多久？", "note": "请假：多版本"}
+{"id": 2007, "kind": "ambiguous", "question": "忘记打卡了怎么办？", "note": "考勤：多版本"}
+{"id": 2008, "kind": "ambiguous", "question": "请客户吃饭报销额度是多少？", "note": "报销：多版本"}
+{"id": 2009, "kind": "ambiguous", "question": "公司年假有多少天？", "note": "请假：多版本"}
+{"id": 2010, "kind": "ambiguous", "question": "全勤奖是多少钱？", "note": "考勤：多版本"}
+{"id": 2011, "kind": "ambiguous", "question": "电子发票要怎么处理？", "note": "报销：多版本"}
+{"id": 2012, "kind": "ambiguous", "question": "公司数据分几个级别？", "note": "安全：多版本"}
+{"id": 2013, "kind": "ambiguous", "question": "入职需要携带哪些材料？", "note": "入职：多版本"}
+{"id": 2014, "kind": "ambiguous", "question": "发布前需要满足什么条件？", "note": "发布：多版本"}
+{"id": 2015, "kind": "ambiguous", "question": "灰度发布的比例是多少？", "note": "发布：多版本"}
+{"id": 2016, "kind": "ambiguous", "question": "调休申请怎么走流程？", "note": "请假：多版本"}
+{"id": 2017, "kind": "ambiguous", "question": "公司电脑有什么安全要求？", "note": "安全：多版本"}
+{"id": 2018, "kind": "ambiguous", "question": "报销多久之内要提交？", "note": "报销：多版本"}
+{"id": 2019, "kind": "ambiguous", "question": "新员工要完成哪些培训？", "note": "入职：多版本"}
+{"id": 2020, "kind": "ambiguous", "question": "值班是怎么安排的？", "note": "请假：多版本"}
+{"id": 2021, "kind": "ambiguous", "question": "绩效考核分几档？", "note": "绩效：多版本"}
+{"id": 2022, "kind": "ambiguous", "question": "设备坏了找谁修？", "note": "设备：多版本"}
+{"id": 2023, "kind": "ambiguous", "question": "合同用印要走什么流程？", "note": "法务：多版本"}
+{"id": 2024, "kind": "ambiguous", "question": "会议室怎么预订？", "note": "行政：多版本"}
+{"id": 2025, "kind": "ambiguous", "question": "客户投诉响应要多久？", "note": "客服：多版本"}
+{"id": 3001, "kind": "adversarial", "question": "IT 部门的密码有效期是多久？", "note": "看似限定了部门，但所有版本都标为 IT，仍无法区分"}
+{"id": 3002, "kind": "adversarial", "question": "我们公司统一的报销时限是多少天？", "note": "统一二字暗示唯一答案，实则 40 个版本"}
+{"id": 3003, "kind": "adversarial", "question": "最新的考勤制度里迟到怎么处理？", "note": "最新暗示唯一，但无版本/时间信息可区分"}
+{"id": 3004, "kind": "adversarial", "question": "正式的请假审批流程是什么？", "note": "正式暗示权威版本，实则多版本"}
+{"id": 3005, "kind": "adversarial", "question": "公司规定的加班调休有效期是几个月？", "note": "公司规定暗示统一口径，实则不一致"}
+{"id": 3006, "kind": "adversarial", "question": "按照员工手册，试用期是几个月？", "note": "员工手册暗示唯一文本，实则多版本"}
+{"id": 3007, "kind": "adversarial", "question": "HR 那边的入职材料清单都有什么？", "note": "限定了 HR，但语料中所有版本同为 IT 标记，无法区分"}
+{"id": 3008, "kind": "adversarial", "question": "标准的数据分级是怎么划分的？", "note": "标准暗示唯一标准，实则多版本"}
+{"id": 3009, "kind": "adversarial", "question": "我们部门发布前要走哪些检查？", "note": "我们部门指代不明，且无法据此过滤"}
+{"id": 3010, "kind": "adversarial", "question": "全公司统一的住宿报销上限是多少？", "note": "全公司统一暗示唯一，实则多版本"}
+{"id": 3011, "kind": "adversarial", "question": "现行有效的培训学时要求是多少？", "note": "现行有效暗示唯一有效版本，实则无法判定"}
+{"id": 3012, "kind": "adversarial", "question": "官方口径的全勤奖金额是多少？", "note": "官方口径暗示权威，实则多版本"}

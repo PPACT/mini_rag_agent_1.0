@@ -1,0 +1,80 @@
+{"id": 1000, "kind": "clear", "question": "远程办公得提前几天在OA上申请？", "source": "llm001_远程办公管理.md", "answer_span": "员工须提前2个工作日通过OA申请", "type": "generated"}
+{"id": 1001, "kind": "clear", "question": "外派到不同城市，每天补贴标准是多少？", "source": "llm002_外派人员管理.md", "answer_span": "一线城市200元，二线城市150元，其他城市100元", "type": "generated"}
+{"id": 1002, "kind": "clear", "question": "实习生补贴是每个月几号发？", "source": "llm003_实习生管理.md", "answer_span": "每月15日发放上月补贴", "type": "generated"}
+{"id": 1003, "kind": "clear", "question": "咱们公司的劳务派遣管理制度文件标题是啥？", "source": "llm004_劳务派遣管理.md", "answer_span": "# 劳务派遣管理制度", "type": "generated"}
+{"id": 1004, "kind": "clear", "question": "离职交接一般要几天啊？普通员工和主管有区别吗？", "source": "llm005_员工离职交接.md", "answer_span": "普通员工交接时限为5个工作日，主管及以上为10个工作日", "type": "generated"}
+{"id": 1005, "kind": "clear", "question": "竞业限制期间，公司给的补偿金是按什么标准算的？", "source": "llm006_竞业限制.md", "answer_span": "员工离职前12个月平均工资的30%，且不低于公司所在地最低工资标准", "type": "generated"}
+{"id": 1006, "kind": "clear", "question": "如果违反了保密协议但没造成损失，要赔多少钱？", "source": "llm007_保密协议管理.md", "answer_span": "尚未造成损失的，支付违约金5万元", "type": "generated"}
+{"id": 1007, "kind": "clear", "question": "咱们公司的专利申报流程管理制度叫啥？", "source": "llm009_专利申报流程.md", "answer_span": "专利申报流程管理制度", "type": "generated"}
+{"id": 1008, "kind": "clear", "question": "咱们单案维权最多能花多少钱？", "source": "llm010_商标管理.md", "answer_span": "单案维权预算不超过20万元", "type": "generated"}
+{"id": 1009, "kind": "clear", "question": "印章保管人休假或离职，多久内要办理移交？", "source": "llm012_印章管理.md", "answer_span": "保管人休假或离职，1个工作日内办理移交并填写清单", "type": "generated"}
+{"id": 1010, "kind": "clear", "question": "咱们公司公文里出现错别字，每处要扣多少钱啊？", "source": "llm014_公文写作规范.md", "answer_span": "错别字每处扣罚30元", "type": "generated"}
+{"id": 1011, "kind": "clear", "question": "会议餐费人均最多能花多少钱？", "source": "llm015_会议管理.md", "answer_span": "会议餐费人均不超过80元", "type": "generated"}
+{"id": 1012, "kind": "clear", "question": "出差回来之后，多久之内必须把报销材料交上去？", "source": "llm016_差旅审批.md", "answer_span": "返程后10个工作日内提交发票及审批单报销", "type": "generated"}
+{"id": 1013, "kind": "clear", "question": "商务接待结束后，报销材料最晚多久要提交？", "source": "llm017_商务接待.md", "answer_span": "接待结束后5个工作日内提交发票、审批单及消费清单", "type": "generated"}
+{"id": 1014, "kind": "clear", "question": "员工没按期登记礼品，公司会怎么处罚？", "source": "llm018_礼品管理.md", "answer_span": "未按期登记的，扣发当月绩效 500 元", "type": "generated"}
+{"id": 1015, "kind": "clear", "question": "供应商的准入资格有效期是多久？到期了怎么续期？", "source": "llm019_供应商准入.md", "answer_span": "准入资格有效期2年，期满前30日可申请续期", "type": "generated"}
+{"id": 1016, "kind": "clear", "question": "报价截止后，多久内要形成比价结果？", "source": "llm020_采购比价.md", "answer_span": "报价截止后 2 个工作日内形成比价结果。", "type": "generated"}
+{"id": 1017, "kind": "clear", "question": "定标之后，中标通知书最晚几天内发出去？", "source": "llm021_招标管理.md", "answer_span": "定标后应在 3 个工作日内发出中标通知书", "type": "generated"}
+{"id": 1018, "kind": "clear", "question": "单笔合同金额多少或者工期多少天以上就必须执行验收制度？", "source": "llm022_验收标准.md", "answer_span": "单笔合同金额≥5万元或工期≥30天的，必须执行", "type": "generated"}
+{"id": 1019, "kind": "clear", "question": "我们公司采购预付款最多能付合同总额的多少？", "source": "llm023_付款账期.md", "answer_span": "预付款不得超过合同总额的30%。", "type": "generated"}
+{"id": 1020, "kind": "clear", "question": "发票不小心弄丢了，多久内要报告给财务负责人？", "source": "llm024_发票管理.md", "answer_span": "遗失发票须2小时内报财务负责人", "type": "generated"}
+{"id": 1021, "kind": "clear", "question": "单笔应缴税款或单张发票金额超过多少，就得总经理审批了？", "source": "llm025_税务申报.md", "answer_span": "单笔应缴税款超过50万元，或单张发票金额超过10万元", "type": "generated"}
+{"id": 1022, "kind": "clear", "question": "预算调整没批准就先行支出，会怎么处罚？", "source": "llm026_预算调整.md", "answer_span": "违者按超标金额1%扣减部门绩效，最高不超过5万元", "type": "generated"}
+{"id": 1023, "kind": "clear", "question": "固定资产单台多少钱以下由部门负责人审批？", "source": "llm028_固定资产管理.md", "answer_span": "单台 5000 元以下由部门负责人审批", "type": "generated"}
+{"id": 1024, "kind": "clear", "question": "生产设备出紧急故障，设备部多久得赶到现场？", "source": "llm030_设备报修.md", "answer_span": "15分钟内到场，4小时内恢复或提供备用设备", "type": "generated"}
+{"id": 1026, "kind": "clear", "question": "如果我第二次违规接入网络，公司会怎么罚我？", "source": "llm032_网络准入.md", "answer_span": "二次违规扣罚绩效200元，停网7天", "type": "generated"}
+{"id": 1027, "kind": "clear", "question": "VPN账号初始密码要在多久内修改？", "source": "llm033_VPN使用.md", "answer_span": "初始密码须在 24 小时内修改", "type": "generated"}
+{"id": 1028, "kind": "clear", "question": "发生数据丢失事件时，责任人必须在多久内上报？", "source": "llm034_数据备份.md", "answer_span": "责任人须在30分钟内上报", "type": "generated"}
+{"id": 1029, "kind": "clear", "question": "咱核心系统灾备切换的RTO和RPO分别不能超过多少？", "source": "llm035_灾备演练.md", "answer_span": "核心系统切换RTO不超过2小时，RPO不超过15分钟", "type": "generated"}
+{"id": 1030, "kind": "clear", "question": "公司普通日志最少要留存多少天？", "source": "llm036_日志审计.md", "answer_span": "各类日志自生成之日起，须至少留存180天", "type": "generated"}
+{"id": 1031, "kind": "clear", "question": "安全部每周要做几次互联网暴露面扫描？", "source": "llm037_漏洞管理.md", "answer_span": "每周 1 次互联网暴露面扫描", "type": "generated"}
+{"id": 1032, "kind": "clear", "question": "渗透测试一般安排在什么时间段进行？", "source": "llm038_渗透测试.md", "answer_span": "工作日 22:00 至次日 6:00", "type": "generated"}
+{"id": 1033, "kind": "clear", "question": "如果发生一级事件，要求多久内报告、多久内启动预案？", "source": "llm039_应急响应.md", "answer_span": "发现人5分钟内报告，应急指挥中心10分钟内启动预案", "type": "generated"}
+{"id": 1034, "kind": "clear", "question": "发生灾害后，多久内要成立应急恢复组？多久内完成损失初判？", "source": "llm040_灾后恢复.md", "answer_span": "灾后30分钟内成立应急恢复组，2小时内完成损失初判", "type": "generated"}
+{"id": 1035, "kind": "clear", "question": "连续几次提交不合规会被技术负责人约谈？", "source": "llm043_代码提交规范.md", "answer_span": "连续 3 次提交不合规者，由技术负责人约谈", "type": "generated"}
+{"id": 1036, "kind": "clear", "question": "咱们每周的发布窗口是哪天几点到几点？", "source": "llm044_分支管理.md", "answer_span": "发布窗口为每周二、四 14:00-16:00", "type": "generated"}
+{"id": 1037, "kind": "clear", "question": "核心交易链路（一级）回滚最多允许多久？", "source": "llm045_发布回滚.md", "answer_span": "一级为核心交易链路，回滚时限不超过5分钟；", "type": "generated"}
+{"id": 1039, "kind": "clear", "question": "P1告警要求几分钟内响应、几分钟内启动处置、几小时内恢复？", "source": "llm047_监控告警.md", "answer_span": "P1（核心业务中断）须5分钟内响应、15分钟内启动处置、2小时内恢复", "type": "generated"}
+{"id": 1040, "kind": "clear", "question": "咱们每月每人最多能值几次班啊？", "source": "llm048_值班排班.md", "answer_span": "每人每月值班不超过6次", "type": "generated"}
+{"id": 1041, "kind": "clear", "question": "P1级故障恢复后多久内必须启动复盘？", "source": "llm049_故障复盘.md", "answer_span": "P1级故障须在恢复后24小时内启动复盘", "type": "generated"}
+{"id": 1042, "kind": "clear", "question": "投诉受理后，多久必须录入客户投诉台账？", "source": "llm051_客户投诉.md", "answer_span": "投诉受理后 30 分钟内录入《客户投诉台账》", "type": "generated"}
+{"id": 1043, "kind": "clear", "question": "紧急工单一般要求多长时间内响应、多长时间内办结？", "source": "llm052_工单流转.md", "answer_span": "紧急工单须在10分钟内响应、1小时内办结", "type": "generated"}
+{"id": 1044, "kind": "clear", "question": "客户打了不满意，责任部门得在几个小时内联系客户？", "source": "llm053_满意度回访.md", "answer_span": "责任部门须在2小时内联系客户", "type": "generated"}
+{"id": 1045, "kind": "clear", "question": "信息管理部每月几号前要发维护通报啊？", "source": "llm054_知识库维护.md", "answer_span": "信息管理部每月10日前发布维护通报", "type": "generated"}
+{"id": 1046, "kind": "clear", "question": "新员工入职培训要在到岗后多久内完成多少学时？", "source": "llm055_培训学时.md", "answer_span": "新员工入职培训须在到岗后30日内完成24学时", "type": "generated"}
+{"id": 1047, "kind": "clear", "question": "内训师课酬各级每学时多少钱？", "source": "llm056_内训师管理.md", "answer_span": "课酬按实际学时计发：初级200元/学时，中级350元/学时，高级500元/学时。", "type": "generated"}
+{"id": 1048, "kind": "clear", "question": "导师带教津贴每个月是多少钱？", "source": "llm057_导师带教.md", "answer_span": "导师津贴标准为每月500元", "type": "generated"}
+{"id": 1049, "kind": "clear", "question": "绩效结果公示后，我要是想申诉，最晚几天内提？", "source": "llm058_绩效申诉.md", "answer_span": "可在结果公示后5个工作日内提出", "type": "generated"}
+{"id": 1050, "kind": "clear", "question": "晋升通过后，工资会涨多少？有没有一次性奖励？", "source": "llm059_晋升答辩.md", "answer_span": "月薪涨幅原则上为10%—25%，并一次性奖励3000元", "type": "generated"}
+{"id": 1051, "kind": "clear", "question": "工资条发下来之后，我必须在几个工作日内核对完？", "source": "llm061_薪酬保密.md", "answer_span": "员工应在收到后5个工作日内核对", "type": "generated"}
+{"id": 1052, "kind": "clear", "question": "咱们公司公积金缴存比例是多少啊？", "source": "llm062_社保公积金.md", "answer_span": "公积金缴存比例公司和个人各 10%", "type": "generated"}
+{"id": 1055, "kind": "clear", "question": "团建经费每人每季度和全年分别不超过多少？", "source": "llm065_团建经费.md", "answer_span": "每人每季度不超过300元、全年不超过1200元", "type": "generated"}
+{"id": 1056, "kind": "clear", "question": "年会筹备组由哪个部门牵头，成员不少于多少人？", "source": "llm066_年会筹备.md", "answer_span": "行政部牵头，成员不少于7人", "type": "generated"}
+{"id": 1057, "kind": "clear", "question": "员工打印纸每人每月最多能领多少包？", "source": "llm067_办公用品.md", "answer_span": "打印纸每人每月限2包", "type": "generated"}
+{"id": 1058, "kind": "clear", "question": "我离职当天门禁权限什么时候注销？", "source": "llm069_门禁权限.md", "answer_span": "员工离职后，门禁权限于离职当日24:00前注销", "type": "generated"}
+{"id": 1059, "kind": "clear", "question": "公司规定员工私人物品每月最多寄几件？", "source": "llm070_快递收发.md", "answer_span": "私人物品每月不超过 2 件", "type": "generated"}
+{"id": 1060, "kind": "clear", "question": "员工要用车的话，得提前多久提交申请？", "source": "llm071_车辆管理.md", "answer_span": "员工用车须提前1个工作日通过OA提交《用车申请单》", "type": "generated"}
+{"id": 1061, "kind": "clear", "question": "中午在食堂吃饭，公司补贴多少？自己掏多少？", "source": "llm072_食堂管理.md", "answer_span": "员工午餐公司补贴 15 元/餐，个人承担 5 元", "type": "generated"}
+{"id": 1062, "kind": "clear", "question": "入住宿舍押金和钥匙押金分别要交多少钱？", "source": "llm073_宿舍管理.md", "answer_span": "入住时缴纳押金300元，钥匙押金20元/把", "type": "generated"}
+{"id": 1063, "kind": "clear", "question": "班车发车前几分钟就不让上车了？", "source": "llm074_班车安排.md", "answer_span": "发车前 2 分钟停止上车，迟到不候", "type": "generated"}
+{"id": 1064, "kind": "clear", "question": "发生保险事故后，员工必须在多少小时内通知行政部和保险公司？", "source": "llm075_差旅保险.md", "answer_span": "员工应在24小时内通知行政部及保险公司", "type": "generated"}
+{"id": 1065, "kind": "clear", "question": "因公护照和签证领回来以后，多久之内必须交给外事专员扫描备案？", "source": "llm076_签证办理.md", "answer_span": "领取后24小时内交外事专员扫描备案", "type": "generated"}
+{"id": 1066, "kind": "clear", "question": "外事接待审批表得提前几天交啊？", "source": "llm077_外事接待.md", "answer_span": "提前5个工作日填写《外事接待审批表》", "type": "generated"}
+{"id": 1068, "kind": "clear", "question": "擅自接受采访或泄密，每次会被扣罚多少钱？", "source": "llm079_对外宣传.md", "answer_span": "擅自接受采访或泄密，每次扣罚绩效500元", "type": "generated"}
+{"id": 1069, "kind": "clear", "question": "接到媒体采访邀约后，多久内必须报备？", "source": "llm080_媒体采访.md", "answer_span": "须于 2 小时内报备并填写《媒体采访申请单》", "type": "generated"}
+{"id": 1070, "kind": "clear", "question": "如果我发现公司负面舆情，最晚多久要报给品牌公关部？", "source": "llm081_舆情处理.md", "answer_span": "须30分钟内向品牌公关部报告", "type": "generated"}
+{"id": 1071, "kind": "clear", "question": "竞品分析的单次费用超过2万元，要找谁审批？", "source": "llm082_竞品分析.md", "answer_span": "超过20,000元报总经理审批", "type": "generated"}
+{"id": 1072, "kind": "clear", "question": "市场调研结束后，正式报告要在几个工作日内提交？", "source": "llm083_市场调研.md", "answer_span": "调研结束后10个工作日内提交正式报告", "type": "generated"}
+{"id": 1073, "kind": "clear", "question": "返点审批通过后多久能支付？", "source": "llm084_渠道返点.md", "answer_span": "返点于审批通过后20个工作日内支付", "type": "generated"}
+{"id": 1074, "kind": "clear", "question": "年度大客户的认定条件是什么？", "source": "llm085_大客户折扣.md", "answer_span": "连续12个月累计采购额达到150万元", "type": "generated"}
+{"id": 1075, "kind": "clear", "question": "POC测试设备借用要交多少押金，归还后多久退还？", "source": "llm086_售前支持.md", "answer_span": "POC 测试设备借用需缴纳押金 1,000 元，归还无损后 5 个工作日内退还。", "type": "generated"}
+{"id": 1076, "kind": "clear", "question": "客服接到报修后，多久要响应并给出初步处理方案？", "source": "llm087_售后保修.md", "answer_span": "客服须在2小时内响应，24小时内给出初步处理方案", "type": "generated"}
+{"id": 1077, "kind": "clear", "question": "P1故障一般要求多久响应、多久恢复？", "source": "llm088_技术支持分级.md", "answer_span": "P1：15分钟响应，2小时恢复；", "type": "generated"}
+{"id": 1078, "kind": "clear", "question": "P1 的工单要求多久内响应、多久内解决？", "source": "llm089_服务台工单.md", "answer_span": "P1 须 15 分钟内响应，2 小时内解决", "type": "generated"}
+{"id": 1079, "kind": "clear", "question": "没审批就擅自变更的话，责任人会被扣多少钱？", "source": "llm090_变更管理.md", "answer_span": "未审批擅自变更，扣减责任人当月绩效200元", "type": "generated"}
+{"id": 1081, "kind": "clear", "question": "年度容量专项经费最多不能超过多少万元？", "source": "llm092_容量规划.md", "answer_span": "年度容量专项经费不超过80万元", "type": "generated"}
+{"id": 1082, "kind": "clear", "question": "紧急修复（P0 故障）先合并后，补评审须在多久内完成？", "source": "llm094_代码评审.md", "answer_span": "须在 4 小时内完成补审并备注故障单号", "type": "generated"}
+{"id": 1083, "kind": "clear", "question": "发现高危漏洞后必须多久内处理完？", "source": "llm096_开源合规.md", "answer_span": "高危漏洞（CVSS≥7.0）24小时内修复或隔离", "type": "generated"}
+{"id": 1084, "kind": "clear", "question": "第三方组件停用后，要在多久内从代码库、镜像和生产环境里移除？", "source": "llm097_第三方组件.md", "answer_span": "组件停用后10个工作日内，须从代码库、镜像及生产环境移除", "type": "generated"}
+{"id": 1085, "kind": "clear", "question": "发明专利受理后每件奖励多少钱？", "source": "llm098_专利奖励.md", "answer_span": "受理后每件奖励2000元", "type": "generated"}

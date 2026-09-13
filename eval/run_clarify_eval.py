@@ -35,22 +35,30 @@ def _load(path: Path) -> list[dict]:
     return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
 
 
-async def run_set(rows: list[dict], top: int) -> list[tuple[dict, bool, bool]]:
-    """返回 [(题目, 是否门控通过, 是否判定歧义)]。"""
+async def _one(row: dict, top: int, sem: asyncio.Semaphore) -> tuple[dict, bool, bool]:
     settings = get_settings()
-    out = []
-    for row in rows:
+    async with sem:
         _, chunks = await retrieve(row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, top_k=top)
         gated = is_diverse(chunks, settings.ambiguity_source_threshold)
         result = await check_ambiguity(row["question"], chunks)
-        out.append((row, gated, result.ambiguous))
-    return out
+        return (row, gated, result.ambiguous)
+
+
+async def run_set(rows: list[dict], top: int, sem: asyncio.Semaphore) -> list[tuple[dict, bool, bool]]:
+    """并发跑一批题；返回 [(题目, 是否门控通过, 是否判定歧义)]。
+
+    并发是必需的：每题要走完整生产链路（改写 + 精排 + 歧义判定 ≈ 3-4 次 LLM 调用），
+    串行跑 117 题需要半小时以上。
+    """
+    return list(await asyncio.gather(*[_one(r, top, sem) for r in rows]))
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--top", type=int, default=5, help="检索取回条数（与线上一致）")
+    parser.add_argument("--concurrency", type=int, default=5, help="并发题数")
     args = parser.parse_args()
+    sem = asyncio.Semaphore(args.concurrency)
 
     clarify_rows = _load(CLARIFY_SET)
     clear_rows = _load(CLEAR_SET)
@@ -61,12 +69,11 @@ async def main() -> None:
     print(f"歧义/对抗题 {len(clarify_rows)} 条，清晰题 {len(clear_rows)} 条，top={args.top}\n")
 
     # 应澄清组
-    should = await run_set(clarify_rows, args.top)
+    print("跑「应澄清」组...", flush=True)
+    should = await run_set(clarify_rows, args.top, sem)
     # 不应澄清组
-    should_not = await run_set(clear_rows, args.top)
-
-    def rate(items, pred):
-        return sum(1 for *_, a in items if pred(a)) if items else 0
+    print("跑「不应澄清」组...", flush=True)
+    should_not = await run_set(clear_rows, args.top, sem)
 
     amb = [(r, g, a) for r, g, a in should if r.get("kind") == "ambiguous"]
     adv = [(r, g, a) for r, g, a in should if r.get("kind") == "adversarial"]

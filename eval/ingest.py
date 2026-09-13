@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 import uuid
 from pathlib import Path
@@ -21,8 +22,21 @@ from src.vector_store.base import Chunk, get_vector_store  # noqa: E402
 
 CORPUS_DIR = Path(__file__).resolve().parent / "corpus"
 SYNTH_DIR = Path(__file__).resolve().parent / "corpus_synth"
-EVAL_DEPARTMENT = "IT"
+MANIFEST = SYNTH_DIR / "_manifest.json"
+COMPANY_SCOPE = "公司"     # 基础文档与通用文档：全员可见
 EVAL_SECRET_LEVEL = 3
+
+
+def _load_manifest() -> dict[str, str]:
+    """读取「部门变体文件 → 所属部门」映射（由 gen_synth.py 生成）。"""
+    if MANIFEST.exists():
+        return json.loads(MANIFEST.read_text(encoding="utf-8"))
+    return {}
+
+
+def _scope_of(filename: str, manifest: dict[str, str]) -> str:
+    """文件的范围：部门变体 → 其部门；其余（基础/通用文档）→ 公司级。"""
+    return manifest.get(filename, COMPANY_SCOPE)
 
 
 def doc_id_for(filename: str) -> str:
@@ -50,12 +64,17 @@ async def main() -> None:
     if exclude_dept:
         # 只剔除"部门变体"（文件名以 dept 开头），保留 LLM 生成的不同主题文档
         files = [p for p in files if not p.name.startswith("dept")]
-    print(f"发现 {len(files)} 篇语料{'（已剔除部门变体）' if exclude_dept else '（基础 + 合成）'}")
+    manifest = _load_manifest()
+    print(f"发现 {len(files)} 篇语料{'（已剔除部门变体）' if exclude_dept else '（基础 + 合成）'}"
+          f"，清单条目 {len(manifest)}")
 
     total_chunks = 0
+    scope_count: dict[str, int] = {}
     for i, path in enumerate(files, 1):
         filename = path.name
         doc_id = doc_id_for(filename)
+        scope = _scope_of(filename, manifest)   # 按真实范围标注（而非全标 IT）
+        scope_count[scope] = scope_count.get(scope, 0) + 1
 
         text = load_text(str(path))
         chunks = split_text(text, settings.chunk_size, settings.chunk_overlap)
@@ -67,7 +86,7 @@ async def main() -> None:
                 chunk_index=j,
                 content=c.text,
                 source_file=filename,
-                department=EVAL_DEPARTMENT,
+                department=scope,
                 secret_level=EVAL_SECRET_LEVEL,
                 start_offset=c.start,
                 end_offset=c.end,
@@ -95,6 +114,8 @@ async def main() -> None:
         if i % 100 == 0 or i == len(files):
             print(f"  进度 {i}/{len(files)} 篇，累计 {total_chunks} 切片")
 
+    top = sorted(scope_count.items(), key=lambda kv: -kv[1])[:5]
+    print(f"范围分布（前5）: {top}{' ...' if len(scope_count) > 5 else ''}")
     print(f"完成，库中切片总数 {await store.count()}")
     await close_pool()
 

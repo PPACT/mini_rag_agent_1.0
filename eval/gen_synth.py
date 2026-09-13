@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import re
 import sys
 from pathlib import Path
@@ -24,6 +25,8 @@ from src.config.litellm_client import complete  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent / "corpus"
 OUT_DIR = Path(__file__).resolve().parent / "corpus_synth"
+MANIFEST_NAME = "_manifest.json"   # 记录"部门变体文件 → 所属部门"
+COMPANY_SCOPE = "公司"              # 基础文档与通用文档的范围（全员可见）
 
 DEPARTMENTS = [
     "IT", "人力资源", "财务", "法务", "行政", "市场", "销售", "客服", "运维", "信息安全",
@@ -78,16 +81,23 @@ def _dept_variant(text: str, dept: str, offset: int) -> str:
 def gen_department_variants() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     base_files = sorted(BASE_DIR.glob("*.md"))
+    manifest: dict[str, str] = {}
     count = 0
     for path in base_files:
         text = path.read_text(encoding="utf-8")
         for i, dept in enumerate(DEPARTMENTS):
             # 偏移必须**每个部门唯一**（原先用 (i%9)+1 会导致模 9 同余的部门产生字节级重复）
             variant = _dept_variant(text, dept, offset=i + 1)
-            out = OUT_DIR / f"dept{i:02d}_{path.name}"
-            out.write_text(variant, encoding="utf-8")
+            name = f"dept{i:02d}_{path.name}"
+            (OUT_DIR / name).write_text(variant, encoding="utf-8")
+            manifest[name] = dept
             count += 1
-    print(f"部门变体: {count} 篇（{len(base_files)} 基础 × {len(DEPARTMENTS)} 部门）")
+    # 记录"文件 → 所属部门"的映射，供 ingest 标注范围（不污染正文）
+    (OUT_DIR / MANIFEST_NAME).write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+    print(f"部门变体: {count} 篇（{len(base_files)} 基础 × {len(DEPARTMENTS)} 部门），"
+          f"清单 → {MANIFEST_NAME}")
     return count
 
 

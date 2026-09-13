@@ -28,3 +28,15 @@ def load_rerank_templates() -> tuple[str, str]:
     """返回精排 (system, human) 提示词模板。"""
     data = _load("rerank")
     return data["system"], data["human"]
+
+
+def load_ambiguity_check_templates() -> tuple[str, str]:
+    """返回歧义判定 (system, human) 提示词模板。"""
+    data = _load("ambiguity_check")
+    return data["system"], data["human"]
+
+
+def load_ambiguity_reply_templates() -> tuple[str, str]:
+    """返回歧义澄清回复 (system, human) 提示词模板。"""
+    data = _load("ambiguity_reply")
+    return data["system"], data["human"]

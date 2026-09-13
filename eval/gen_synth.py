@@ -82,7 +82,8 @@ def gen_department_variants() -> int:
     for path in base_files:
         text = path.read_text(encoding="utf-8")
         for i, dept in enumerate(DEPARTMENTS):
-            variant = _dept_variant(text, dept, offset=(i % 9) + 1)
+            # 偏移必须**每个部门唯一**（原先用 (i%9)+1 会导致模 9 同余的部门产生字节级重复）
+            variant = _dept_variant(text, dept, offset=i + 1)
             out = OUT_DIR / f"dept{i:02d}_{path.name}"
             out.write_text(variant, encoding="utf-8")
             count += 1

@@ -1,7 +1,7 @@
 """问答相关 DTO。"""
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
@@ -15,6 +15,16 @@ class Source(BaseModel):
     score: float
 
 
+class ClarifyOption(BaseModel):
+    """歧义澄清时给出的候选（让用户明确意图）。"""
+
+    source: str
+    summary: str
+
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list[Source]
+    # 歧义处理：为 True 时 answer 是澄清话术，clarify_options 列出候选
+    need_clarification: bool = False
+    clarify_options: list[ClarifyOption] = Field(default_factory=list)

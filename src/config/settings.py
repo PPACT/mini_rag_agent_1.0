@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     rerank_candidates: int = 20        # 粗排召回的候选数（精排后取 top_k）
     rerank_snippet_chars: int = 300    # 送进精排时每条的截断长度（控成本）
 
+    # 歧义判定（避免"候选互相矛盾却擅自选一个"）
+    ambiguity_check_enabled: bool = True
+    ambiguity_source_threshold: int = 3   # top-K 来自 >=N 个不同来源才触发 LLM 判定（省调用）
+    ambiguity_snippet_chars: int = 300
+
     @property
     def upload_dir_abs(self) -> str:
         """上传目录绝对路径（upload_dir 相对路径以项目根为基准）。"""

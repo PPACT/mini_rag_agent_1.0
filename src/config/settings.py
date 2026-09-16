@@ -50,7 +50,9 @@ class Settings(BaseSettings):
     cache_ttl: int = 3600
 
     # 多查询扩展（Query Rewriting）
-    query_rewrite_enabled: bool = True
+    # 实测（清晰题 80 条）：单独使用零增益；与精排组合后关掉它 Recall@1 反而 0.800→0.850、MRR 0.872→0.896。
+    # 且它是链路里的一级 LLM（4→3 级），关掉可减少方差。故默认关闭，保留开关备用。
+    query_rewrite_enabled: bool = False
     query_rewrite_count: int = 3       # 生成的改写变体数（不含原问题）
     rrf_k: int = 60                    # RRF 融合常数
 

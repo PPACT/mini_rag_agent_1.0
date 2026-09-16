@@ -95,7 +95,8 @@ async def check_ambiguity(question: str, chunks: list[Chunk]) -> AmbiguityResult
                         candidates=_format_candidates(chunks, settings.ambiguity_snippet_chars),
                     ),
                 },
-            ]
+            ],
+            temperature=0,  # 判定必须可复现：同一候选集应给出同一结论
         )
         result = parse_result(raw)
         audit("ambiguity_check", question=question, ambiguous=result.ambiguous, options=len(result.options))

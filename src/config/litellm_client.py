@@ -7,7 +7,11 @@ from src.config.settings import get_settings
 
 
 async def complete(messages: list[dict], temperature: float = 0.1) -> str:
-    """调用 LLM 生成回答，返回文本内容。"""
+    """调用 LLM 生成回答，返回文本内容。
+
+    temperature 约定：**要求可复现的任务（精排、歧义判定）传 0**；
+    需要多样性的任务（查询改写）保留默认 0.1；答案生成由 Agent 侧控制。
+    """
     settings = get_settings()
     if not settings.deepseek_api_key:
         raise RuntimeError("DEEPSEEK_API_KEY 未配置，请先在 .env 填入")

@@ -23,7 +23,9 @@ from src.rag.retriever import retrieve  # noqa: E402
 from src.vector_store.base import Chunk  # noqa: E402
 
 DATASET = Path(__file__).resolve().parent / "dataset_clear.jsonl"
-EVAL_DEPARTMENT = ["IT"]
+# 可见范围 = 公司级 + 本部门（与线上模型一致）。
+# 注意：语料按真实范围标注后，只传 ["IT"] 会把公司级文档全部过滤掉 → 召回全灭。
+EVAL_DEPARTMENT = ["IT", "公司"]
 EVAL_SECRET_LEVEL = 3
 KS = (1, 3, 5)
 CONCURRENCY = 5   # 并发题数（每题含改写/精排等 LLM 调用，串行会非常慢）
@@ -33,6 +35,8 @@ MODES: list[tuple[str, dict]] = [
     ("+混合", {"use_rewrite": False, "use_rerank": False, "use_hybrid": True}),
     ("改写+精排", {"use_rewrite": True, "use_rerank": True, "use_hybrid": False}),
     ("全开(生产)", {"use_rewrite": True, "use_rerank": True, "use_hybrid": True}),
+    # 短链路候选：关掉改写（LLM 环节 4→3），验证是否以少量召回换稳定
+    ("短链路(无改写)", {"use_rewrite": False, "use_rerank": True, "use_hybrid": True}),
 ]
 
 

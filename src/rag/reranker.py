@@ -46,7 +46,8 @@ class LLMReranker(BaseReranker):
                 [
                     {"role": "system", "content": system_tpl},
                     {"role": "user", "content": human_tpl.format(question=query, candidates=candidates)},
-                ]
+                ],
+                temperature=0,  # 精排必须可复现：同一输入应给出同一排序
             )
             order = self._parse(raw, len(chunks))
             audit("rerank", query=query, candidates=len(chunks), reordered=bool(order))

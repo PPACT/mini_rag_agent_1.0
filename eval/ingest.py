@@ -44,19 +44,8 @@ def doc_id_for(filename: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"eval:{filename}"))
 
 
-async def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--exclude-dept", action="store_true", help="不灌部门变体（隔离规模 vs 近重复两个因素）")
-    args = parser.parse_args()
-    exclude_dept = args.exclude_dept
-
-    settings = get_settings()
-    pool = await get_pool()
-    store = get_vector_store()
-    embedding = get_embedding()
-
+def collect_files(exclude_dept: bool) -> list[Path]:
+    """收集语料文件。exclude_dept=True 时剔除部门变体（得到「干净语料」）。"""
     files: list[Path] = []
     for d in (CORPUS_DIR, SYNTH_DIR):
         if d.exists():
@@ -64,6 +53,23 @@ async def main() -> None:
     if exclude_dept:
         # 只剔除"部门变体"（文件名以 dept 开头），保留 LLM 生成的不同主题文档
         files = [p for p in files if not p.name.startswith("dept")]
+    return files
+
+
+async def truncate() -> None:
+    """清空评测数据（documents / chunks）。"""
+    pool = await get_pool()
+    await pool.execute("TRUNCATE documents, chunks CASCADE")
+
+
+async def ingest(exclude_dept: bool = False) -> int:
+    """灌入语料，返回切片总数。供 CLI 与评测脚本复用。"""
+    settings = get_settings()
+    pool = await get_pool()
+    store = get_vector_store()
+    embedding = get_embedding()
+
+    files = collect_files(exclude_dept)
     manifest = _load_manifest()
     print(f"发现 {len(files)} 篇语料{'（已剔除部门变体）' if exclude_dept else '（基础 + 合成）'}"
           f"，清单条目 {len(manifest)}")
@@ -116,7 +122,24 @@ async def main() -> None:
 
     top = sorted(scope_count.items(), key=lambda kv: -kv[1])[:5]
     print(f"范围分布（前5）: {top}{' ...' if len(scope_count) > 5 else ''}")
-    print(f"完成，库中切片总数 {await store.count()}")
+    total = await store.count()
+    print(f"完成，库中切片总数 {total}")
+    return total
+
+
+async def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exclude-dept", action="store_true",
+                        help="不灌部门变体（得到「干净语料」，用于日常集评估）")
+    parser.add_argument("--truncate", action="store_true", help="灌之前先清空")
+    args = parser.parse_args()
+
+    if args.truncate:
+        await truncate()
+        print("已清空旧数据")
+    await ingest(args.exclude_dept)
     await close_pool()
 
 

@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # 向量库开关（pgvector | milvus）
     vector_store: str = "pgvector"
 
+    # 范围模型：公司级文档的部门标记（全员可见）。
+    # 用户可见范围 = 公司级 + 本部门 —— 少了它，全员该看的制度反而看不到。
+    company_scope: str = "公司"
+
     # 应用
     upload_dir: str = "./data/uploads"
     max_upload_size: int = 50 * 1024 * 1024  # 上传大小上限（默认 50MB）

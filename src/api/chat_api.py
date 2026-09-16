@@ -42,7 +42,8 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)) -> Chat
     if not settings.deepseek_api_key:
         raise HTTPException(status_code=503, detail="DEEPSEEK_API_KEY 未配置，请先在 .env 填入")
 
-    departments = [user.department]
+    # 可见范围 = 公司级（全员）+ 本部门。缺少公司级会导致全员该看的制度被过滤掉。
+    departments = list({user.department, settings.company_scope})
     secret_level = user.secret_level
 
     redis = get_redis()

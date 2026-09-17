@@ -40,51 +40,87 @@ class PgVectorStore(VectorStore):
         return "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
 
     @staticmethod
-    def _perm_conds(filters: AccessFilter, start_n: int) -> tuple[list[str], list, int]:
-        """权限过滤条件（向量检索与词法检索**共用**，确保两边过滤语义一致）。"""
-        conds = ["d.is_deleted = false", "c.is_deprecated = false"]
+    def _filter_parts(filters: AccessFilter, start_n: int, soft_scope: bool, penalty: float):
+        """构造过滤片段（向量检索与词法检索**共用**，确保两侧语义一致）。
+
+        返回 (hard_conds, weight_expr, weight_params, params, n)：
+        - hard_conds: 必须硬过滤的 WHERE 条件（数据状态、密级；**软过滤时不含部门**）
+        - weight_expr: score 的权重表达式（软过滤时 CASE 降权范围外；否则 '1.0'）
+        - weight_params: 软过滤时 [departments, penalty]；否则 []
+        - params / n: 其余参数与计数器
+        """
         params: list = []
         n = start_n
-        if filters.departments:
-            conds.append(f"c.department = ANY(${n})")
-            params.append(filters.departments)
-            n += 1
+        hard = ["d.is_deleted = false", "c.is_deprecated = false"]
         if filters.secret_level_le is not None:
-            conds.append(f"c.secret_level <= ${n}")
+            hard.append(f"c.secret_level <= ${n}")
             params.append(filters.secret_level_le)
             n += 1
-        return conds, params, n
+
+        if filters.departments and soft_scope:
+            # 软过滤：范围外不排除，降权排序
+            d_idx, p_idx = n, n + 1
+            n += 2
+            weight_expr = (f"CASE WHEN c.department = ANY(${d_idx}) "
+                           f"THEN 1.0 ELSE ${p_idx}::double precision END")
+            weight_params = [filters.departments, penalty]
+        else:
+            if filters.departments:
+                hard.append(f"c.department = ANY(${n})")
+                params.append(filters.departments)
+                n += 1
+            weight_expr = "1.0"
+            weight_params = []
+        return hard, weight_expr, weight_params, params, n
 
     @classmethod
-    def _build_search_sql(cls, vec_str: str, filters: AccessFilter, top_k: int) -> tuple[str, list]:
+    def _build_search_sql(cls, vec_str: str, filters: AccessFilter, top_k: int,
+                          soft_scope: bool | None = None, penalty: float | None = None) -> tuple[str, list]:
         """构建向量检索 SQL 与参数（纯函数，便于单测 AccessFilter→SQL 翻译）。"""
-        conds, perm_params, n = cls._perm_conds(filters, start_n=2)
-        sql = f"""
-            SELECT {_SELECT_COLS},
-                   (1 - (c.embedding <=> $1::vector)) AS score
-            FROM chunks c
-            JOIN documents d ON d.id = c.document_id
-            WHERE {' AND '.join(conds)}
-            ORDER BY c.embedding <=> $1::vector
-            LIMIT ${n}
-        """
-        return sql, [vec_str, *perm_params, top_k]
+        from src.config.settings import get_settings
 
-    @classmethod
-    def _build_lexical_sql(cls, tsquery: str, filters: AccessFilter, top_k: int) -> tuple[str, list]:
-        """构建词法检索 SQL 与参数（$1 为 tsquery 字符串，权限过滤与向量侧共用）。"""
-        conds, perm_params, n = cls._perm_conds(filters, start_n=2)
-        conds.append("c.content_tsv @@ to_tsquery('simple', $1)")
+        s = get_settings()
+        if soft_scope is None:
+            soft_scope = s.scope_soft_enabled
+        if penalty is None:
+            penalty = s.scope_soft_penalty
+        hard, weight, wparams, params, n = cls._filter_parts(
+            filters, 2, soft_scope, penalty)
         sql = f"""
             SELECT {_SELECT_COLS},
-                   ts_rank(c.content_tsv, to_tsquery('simple', $1)) AS score
+                   (1 - (c.embedding <=> $1::vector)) * ({weight}) AS score
             FROM chunks c
             JOIN documents d ON d.id = c.document_id
-            WHERE {' AND '.join(conds)}
+            WHERE {' AND '.join(hard)}
             ORDER BY score DESC
             LIMIT ${n}
         """
-        return sql, [tsquery, *perm_params, top_k]
+        return sql, [vec_str, *params, *wparams, top_k]
+
+    @classmethod
+    def _build_lexical_sql(cls, tsquery: str, filters: AccessFilter, top_k: int,
+                           soft_scope: bool | None = None, penalty: float | None = None) -> tuple[str, list]:
+        """构建词法检索 SQL 与参数（$1 为 tsquery 字符串，权限过滤与向量侧共用）。"""
+        from src.config.settings import get_settings
+
+        s = get_settings()
+        if soft_scope is None:
+            soft_scope = s.scope_soft_enabled
+        if penalty is None:
+            penalty = s.scope_soft_penalty
+        hard, weight, wparams, params, n = cls._filter_parts(
+            filters, 2, soft_scope, penalty)
+        hard.append("c.content_tsv @@ to_tsquery('simple', $1)")
+        sql = f"""
+            SELECT {_SELECT_COLS},
+                   ts_rank(c.content_tsv, to_tsquery('simple', $1)) * ({weight}) AS score
+            FROM chunks c
+            JOIN documents d ON d.id = c.document_id
+            WHERE {' AND '.join(hard)}
+            ORDER BY score DESC
+            LIMIT ${n}
+        """
+        return sql, [tsquery, *params, *wparams, top_k]
 
     async def search(self, embedding: list[float], filters: AccessFilter, top_k: int) -> list[Chunk]:
         pool = await get_pool()

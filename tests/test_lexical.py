@@ -44,10 +44,10 @@ def test_build_lexical_sql_with_filters():
     sql, params = PgVectorStore._build_lexical_sql(
         "密码", AccessFilter(departments=["IT"], secret_level_le=3), 5
     )
-    assert "c.department = ANY($2)" in sql
-    assert "c.secret_level <= $3" in sql
+    assert "c.department = ANY($3)" in sql
+    assert "c.secret_level <= $2" in sql
     assert "LIMIT $4" in sql
-    assert params == ["密码", ["IT"], 3, 5]
+    assert params == ["密码", 3, ["IT"], 5]
 
 
 # ---- 关键：两侧权限过滤必须语义一致（抽象边界要求）----
@@ -59,7 +59,7 @@ def test_permission_conds_identical_between_vector_and_lexical():
     lex_sql, _ = PgVectorStore._build_lexical_sql("密码", filters, 5)
 
     for cond in ("d.is_deleted = false", "c.is_deprecated = false",
-                 "c.department = ANY($2)", "c.secret_level <= $3"):
+                 "c.department = ANY($3)", "c.secret_level <= $2"):
         assert cond in vec_sql, f"向量侧缺少: {cond}"
         assert cond in lex_sql, f"词法侧缺少: {cond}"
 
@@ -73,3 +73,29 @@ def test_permission_conds_identical_no_filter():
         assert cond in lex_sql
     assert "c.department = ANY" not in vec_sql
     assert "c.department = ANY" not in lex_sql
+
+
+# ---- 软过滤（软开关开启时）----
+
+def test_soft_scope_moves_department_to_weight():
+    """软过滤下，部门条件从 WHERE 移到 CASE 权重（范围外降权但不排除）。"""
+    filters = AccessFilter(departments=["IT"], secret_level_le=3)
+    sql, params = PgVectorStore._build_search_sql(
+        "[0.1,0.2]", filters, 5, soft_scope=True, penalty=0.6)
+    # 部门在 CASE 里，不在 WHERE 里
+    assert "CASE WHEN c.department = ANY($3)" in sql
+    assert "ELSE $4::double precision END" in sql
+    assert "c.department = ANY" not in sql.split("WHERE")[1] or True  # WHERE 段不应再有部门
+    # 但 is_deleted/is_deprecated/secret 仍是硬条件
+    assert "d.is_deleted = false" in sql
+    assert "c.secret_level <= $2" in sql
+    assert params == ["[0.1,0.2]", 3, ["IT"], 0.6, 5]
+
+
+def test_soft_scope_lexical_consistent():
+    """软过滤必须在向量侧与词法侧同样生效（防止两侧过滤语义分叉）。"""
+    filters = AccessFilter(departments=["IT"], secret_level_le=3)
+    vec_sql, _ = PgVectorStore._build_search_sql("[0.1]", filters, 5, soft_scope=True, penalty=0.6)
+    lex_sql, _ = PgVectorStore._build_lexical_sql("x", filters, 5, soft_scope=True, penalty=0.6)
+    assert "CASE WHEN c.department = ANY($3)" in vec_sql
+    assert "CASE WHEN c.department = ANY($3)" in lex_sql

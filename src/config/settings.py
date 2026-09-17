@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     # 用户可见范围 = 公司级 + 本部门 —— 少了它，全员该看的制度反而看不到。
     company_scope: str = "公司"
 
+    # 范围过滤：硬 vs 软
+    # 硬过滤（默认，安全）：范围外完全排除。元数据一旦标错/缺失 → 永久静默搜不到。
+    # 软过滤：范围内权重 1.0、范围外 ×penalty 降权但不排除 → 标错时文档仍能找到（排后）。
+    # 高密级场景仍需硬隔离（secret_level 永远硬过滤），此开关只影响「范围偏好」。
+    scope_soft_enabled: bool = False
+    scope_soft_penalty: float = 0.85   # 实测：0.6 降权过重致标错文档掉出候选，0.85 可使其回到第 2
+
     # 应用
     upload_dir: str = "./data/uploads"
     max_upload_size: int = 50 * 1024 * 1024  # 上传大小上限（默认 50MB）

@@ -13,6 +13,13 @@ docs/RAG生产化回顾.md
 docs/资源规划.md
 docs/评估报告.md
 
+# ===== 本地启动脚本（含机器绝对路径，不上传）=====
+# 这类脚本硬编码了本机路径（Miniforge3 / Docker / Ollama），
+# 上传公共仓库既泄露机器信息，对别人也无用。
+scripts/start_demo.py
+scripts/stop_demo.py
+启动演示.bat
+
 # ===== IDE 本地配置 =====
 .vscode/
 .idea/

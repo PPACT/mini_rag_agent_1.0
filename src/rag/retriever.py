@@ -71,6 +71,7 @@ async def retrieve(
     filters = AccessFilter(departments=departments, secret_level_le=secret_level)
 
     ranked_lists: list[list[Chunk]] = []
+    vector_lists: list[list[Chunk]] = []
 
     # 词法侧（混合检索）：兜底"精确词"查询（缩写、编号、型号）
     # 不支持的实现返回空列表，自动退化为纯向量检索
@@ -81,12 +82,26 @@ async def retrieve(
 
     # 向量侧（多查询扩展的每一路）
     for vec in query_vectors:
-        ranked_lists.append(await store.search(vec, filters, recall_k))
+        lst = await store.search(vec, filters, recall_k)
+        vector_lists.append(lst)
+        ranked_lists.append(lst)
 
     if len(ranked_lists) == 1:
         candidates = ranked_lists[0]
     else:
         candidates = rrf_merge(ranked_lists, settings.rrf_k)[:recall_k]
+
+    # ⚠️ 修复 score 语义：RRF 用 setdefault 保留"第一出现"那路的原始分，
+    # 而词法路是 ts_rank（0~0.1）、向量路是余弦相似度（0~1），两者不可比。
+    # 这里对每个候选回填**向量路的真实相似度**（若存在），使 score 语义统一、可做阈值判断。
+    vec_best: dict[str, float] = {}
+    for lst in vector_lists:
+        for c in lst:
+            if c.id and c.score > vec_best.get(c.id, -1.0):
+                vec_best[c.id] = c.score
+    for c in candidates:
+        if c.id in vec_best:
+            c.score = vec_best[c.id]
 
     # 精排：用更强的判断力纠正"语义相近但答非所问"
     if use_rerank and len(candidates) > top_k:

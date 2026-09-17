@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from langchain_core.messages import HumanMessage
@@ -30,6 +31,24 @@ def _to_sources(chunks) -> list[Source]:
         Source(source_file=c.source_file, chunk_index=c.chunk_index, score=round(c.score, 4))
         for c in chunks
     ]
+
+
+# 只认明确的引用形式：[来源1] / [1] / 来源1 —— 必须带「来源」前缀或方括号，
+# 否则答案正文里的裸数字（如"2 个工作日"）会被误当成引用编号。
+_REF_RE = re.compile(r"\[来源\s*(\d+)\s*\]|\[(\d+)\]|来源\s*(\d+)", re.IGNORECASE)
+
+
+def _cited_chunks(chunks, answer: str) -> list:
+    """从答案里解析 [来源N] 引用，返回被实际引用的块（按上下文顺序）。
+
+    命中规则：LLM 在 context 里看到的编号是「[来源1]..[来源N]」，对应 chunks 的 1-based 索引。
+    若解析不到任何引用 → 保守回退为全部（避免前端空白），并记录审计。
+    """
+    cited = sorted({int(g) for m in _REF_RE.findall(answer) for g in m if g})
+    idx = [i - 1 for i in cited if 1 <= i <= len(chunks)]
+    if not idx:
+        return chunks
+    return [chunks[i] for i in idx]
 
 
 @router.post("", response_model=ChatResponse)
@@ -81,7 +100,12 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)) -> Chat
     answer = str(result["messages"][-1].content)
     audit("llm", question=req.question, user=user.name, answer_len=len(answer))
 
-    # 5. 组装 + 写缓存
-    resp = ChatResponse(answer=answer, sources=_to_sources(chunks))
+    # 5. 引用校验：sources 只返回 LLM **实际引用**的块（而非全部检索结果）
+    cited = _cited_chunks(chunks, answer)
+    audit("cite", question=req.question, cited=len(cited), total=len(chunks),
+          cited_note="fallback_all" if len(cited) == len(chunks) and len(chunks) > 0 else "")
+
+    # 6. 组装 + 写缓存
+    resp = ChatResponse(answer=answer, sources=_to_sources(cited))
     await redis.set(key, resp.model_dump_json(), ex=settings.cache_ttl)
     return resp

@@ -91,6 +91,12 @@ async def demo_ask(req: AskRequest) -> dict:
         "question": req.question,
         "user": {"name": user.name, "department": user.department, "scope": departments},
         "mode": trace.get("mode", {}),
+        # 当前精排后端（供页面显示：LLM 还是本地 cross-encoder）
+        "rerank": {
+            "backend": settings.rerank_backend,
+            "model": (settings.rerank_local_model if settings.rerank_backend == "local"
+                      else settings.deepseek_model),
+        },
         "timings": {"retrieve_ms": retrieve_ms, "generate_ms": generate_ms, "total_ms": retrieve_ms + generate_ms},
         "answer": answer,
         "cited": cited,
@@ -165,7 +171,7 @@ DEMO_HTML = """<!DOCTYPE html>
     </div>
     <div class="row" style="margin-top:10px">
       <label class="chk"><input type="checkbox" id="hybrid" checked> 混合检索（向量+词法）</label>
-      <label class="chk"><input type="checkbox" id="rerank" checked> LLM 精排</label>
+      <label class="chk"><input type="checkbox" id="rerank" checked> 启用精排</label>
       <label class="chk"><input type="checkbox" id="answer" checked> 生成答案（关掉更快，只看检索）</label>
     </div>
     <div class="meta" id="meta">就绪</div>
@@ -203,7 +209,13 @@ $('#go').onclick = async () => {
     if (!r.ok) { $('#meta').innerHTML = `<span class="err">失败：${esc(d.detail)}</span>`; return; }
 
     const t = d.timings;
-    $('#meta').innerHTML = `可见范围 <b>${esc(d.user.scope.join(' + '))}</b> ｜ 耗时：检索 <b>${t.retrieve_ms}ms</b> / 生成 <b>${t.generate_ms}ms</b> / 合计 <b>${t.total_ms}ms</b>`;
+    const rk = d.rerank || {};
+    const rkLabel = rk.backend === 'local'
+        ? `本地 cross-encoder <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`
+        : `LLM <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`;
+    $('#meta').innerHTML = `可见范围 <b>${esc(d.user.scope.join(' + '))}</b>`
+      + ` ｜ 精排后端：<b>${rkLabel}</b>`
+      + ` ｜ 耗时：检索 <b>${t.retrieve_ms}ms</b> / 生成 <b>${t.generate_ms}ms</b> / 合计 <b>${t.total_ms}ms</b>`;
 
     // 精排前后变化标记
     const before = new Map(d.candidates.map(x=>[x.source+'#'+x.chunk_index, x.rank]));

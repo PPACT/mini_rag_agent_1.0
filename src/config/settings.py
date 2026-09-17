@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     rerank_candidates: int = 20        # 粗排召回的候选数（精排后取 top_k）
     rerank_snippet_chars: int = 300    # 送进精排时每条的截断长度（控成本）
 
+    # 精排后端：llm = 云端 LLM（实测 ~9 秒/次）｜ local = 本地 cross-encoder（~0.1 秒、确定性）
+    rerank_backend: str = "llm"
+    rerank_local_model: str = "BAAI/bge-reranker-base"
+    rerank_local_device: str = ""      # 空 = 自动（有 CUDA 用 cuda，否则 cpu）
+
     # 混合检索（向量 + 全文检索 RRF 融合，兜底"精确词"查询）
     hybrid_search_enabled: bool = True
 

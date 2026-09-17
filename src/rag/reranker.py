@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from abc import ABC, abstractmethod
@@ -78,16 +79,65 @@ class LLMReranker(BaseReranker):
         return ordered
 
 
-class LocalCrossEncoderReranker(BaseReranker):
-    """占位：本地 cross-encoder（如 bge-reranker-base）。
+def _cuda_available() -> bool:
+    try:
+        import torch
 
-    显存约束见 `docs/资源规划.md`：8GB 机器上选 base 版（~1.2GB），且须支持 CPU 降级。
+        return torch.cuda.is_available()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+class LocalCrossEncoderReranker(BaseReranker):
+    """本地 cross-encoder 精排（默认 bge-reranker-base）。
+
+    与 LLM 精排的关键差异：
+    - **确定性**：同输入同输出（无温度随机、无网络波动）
+    - **快**：GPU 上 20 条候选约数十毫秒（LLM 实测约 9 秒）
+    - 零 API 成本
+
+    代价：首次调用时懒加载模型（~1.1GB），常驻显存约 1.2GB（见 `docs/资源规划.md`）。
     """
 
+    def __init__(self, model_name: str | None = None, device: str | None = None) -> None:
+        s = get_settings()
+        self._model_name = model_name or s.rerank_local_model
+        self._device = device or s.rerank_local_device or ("cuda" if _cuda_available() else "cpu")
+        self._snippet = s.rerank_snippet_chars
+        self._model = None
+
+    def _ensure_model(self):
+        """懒加载（首次调用时才载入权重）。"""
+        if self._model is None:
+            from sentence_transformers import CrossEncoder
+
+            self._model = CrossEncoder(self._model_name, device=self._device)
+            audit("rerank_model_loaded", model=self._model_name, device=self._device)
+        return self._model
+
     async def rerank(self, query: str, chunks: list[Chunk], top_n: int) -> list[Chunk]:
-        raise NotImplementedError("本地 cross-encoder 尚未接入，仅占位")
+        if len(chunks) <= top_n:
+            return chunks[:top_n]
+        model = self._ensure_model()
+        pairs = [(query, c.content[: self._snippet]) for c in chunks]
+        # CrossEncoder.predict 是同步阻塞的 → 丢到线程池，避免卡住事件循环
+        scores = await asyncio.to_thread(model.predict, pairs)
+        order = sorted(range(len(chunks)), key=lambda i: -float(scores[i]))
+        return [chunks[i] for i in order][:top_n]
+
+
+_reranker_instance: BaseReranker | None = None
 
 
 def get_reranker() -> BaseReranker:
-    """返回当前精排实现（默认 LLM；后期可切本地 cross-encoder）。"""
-    return LLMReranker()
+    """按配置返回精排实现（**单例**）：rerank_backend = 'llm'（默认）| 'local'。
+
+    必须是单例——本地模型加载一次要 160+ 秒，每次新建实例会导致每个请求都重载模型。
+    """
+    global _reranker_instance
+    if _reranker_instance is None:
+        if get_settings().rerank_backend == "local":
+            _reranker_instance = LocalCrossEncoderReranker()
+        else:
+            _reranker_instance = LLMReranker()
+    return _reranker_instance

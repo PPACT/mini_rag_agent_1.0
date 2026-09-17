@@ -42,10 +42,12 @@ async def retrieve(
     use_rerank: bool | None = None,
     use_hybrid: bool | None = None,
     top_k: int | None = None,
+    trace: dict | None = None,
 ) -> tuple[str, list[Chunk]]:
     """混合检索 + 两段式：词法/向量多路粗排 → RRF 融合 → 精排 → 返回 (上下文文本, 命中切片)。
 
     各开关 None 时读配置；显式传 False 可跑基线（评测对比用）。
+    trace: 传入 dict 时，会把中间结果写入（用于 WebUI 透视链路 / 排查精排误杀）。
     """
     settings = get_settings()
     if use_rewrite is None:
@@ -108,5 +110,12 @@ async def retrieve(
         chunks = await get_reranker().rerank(question, candidates, top_k)
     else:
         chunks = candidates[:top_k]
+
+    if trace is not None:
+        # 暴露中间结果：粗排候选池 vs 精排结果（用于看"精排是否误杀/提权"）
+        trace["mode"] = {"rewrite": use_rewrite, "hybrid": use_hybrid, "rerank": use_rerank}
+        trace["recall_k"] = recall_k
+        trace["candidates"] = candidates          # RRF 融合后的粗排候选池
+        trace["final"] = chunks                   # 精排（或截断）后的最终结果
 
     return format_context(chunks), chunks

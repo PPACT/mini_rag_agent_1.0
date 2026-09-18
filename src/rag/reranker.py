@@ -107,11 +107,21 @@ class LocalCrossEncoderReranker(BaseReranker):
         self._model = None
 
     def _ensure_model(self):
-        """懒加载（首次调用时才载入权重）。"""
+        """懒加载（首次调用时才载入权重）。
+
+        `local_files_only=True` 跳过 huggingface_hub 的联网"检查更新"——
+        模型已在本地缓存时，这一步会白等 20-40 秒（网络慢时更久）。
+        """
         if self._model is None:
             from sentence_transformers import CrossEncoder
 
-            self._model = CrossEncoder(self._model_name, device=self._device)
+            try:
+                self._model = CrossEncoder(
+                    self._model_name, device=self._device, local_files_only=True,
+                )
+            except Exception:  # noqa: BLE001
+                # 首次使用：本地无缓存 → 回退在线加载（会触发一次下载）
+                self._model = CrossEncoder(self._model_name, device=self._device)
             audit("rerank_model_loaded", model=self._model_name, device=self._device)
         return self._model
 

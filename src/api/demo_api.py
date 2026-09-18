@@ -85,7 +85,11 @@ async def demo_ask(req: AskRequest) -> dict:
         from src.api.chat_api import _cited_chunks
         cited = [_brief(c, i) for i, c in enumerate(_cited_chunks(final, answer), 1)]
 
+    # 歧义判定也是 LLM 调用（1-3 秒），必须计时——否则页面显示的"合计"会远低于真实等待
+    t2 = time.perf_counter()
     amb = await check_ambiguity(req.question, final) if final else None
+    ambiguity_ms = int((time.perf_counter() - t2) * 1000)
+    total_ms = retrieve_ms + generate_ms + ambiguity_ms
 
     return {
         "question": req.question,
@@ -97,7 +101,12 @@ async def demo_ask(req: AskRequest) -> dict:
             "model": (settings.rerank_local_model if settings.rerank_backend == "local"
                       else settings.deepseek_model),
         },
-        "timings": {"retrieve_ms": retrieve_ms, "generate_ms": generate_ms, "total_ms": retrieve_ms + generate_ms},
+        "timings": {
+            "retrieve_ms": retrieve_ms,      # 检索链路（含精排）
+            "generate_ms": generate_ms,      # LLM 生成答案
+            "ambiguity_ms": ambiguity_ms,    # 歧义判定（LLM）
+            "total_ms": total_ms,            # 三者之和（应接近真实往返）
+        },
         "answer": answer,
         "cited": cited,
         "ambiguous": bool(amb and amb.ambiguous),
@@ -196,6 +205,7 @@ $('#go').onclick = async () => {
   const btn = $('#go'); btn.disabled = true;
   $('#meta').textContent = '运行中…（开精排+生成约 5-10 秒）';
   $('#out').innerHTML = '';
+  const tStart = performance.now();
   try {
     const r = await fetch('/demo/ask', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -205,6 +215,7 @@ $('#go').onclick = async () => {
         with_answer: $('#answer').checked
       })
     });
+    const roundtrip = Math.round(performance.now() - tStart);   // 真实往返（用户实际等待）
     const d = await r.json();
     if (!r.ok) { $('#meta').innerHTML = `<span class="err">失败：${esc(d.detail)}</span>`; return; }
 
@@ -213,9 +224,15 @@ $('#go').onclick = async () => {
     const rkLabel = rk.backend === 'local'
         ? `本地 cross-encoder <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`
         : `LLM <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`;
+    const gap = roundtrip - t.total_ms;
     $('#meta').innerHTML = `可见范围 <b>${esc(d.user.scope.join(' + '))}</b>`
-      + ` ｜ 精排后端：<b>${rkLabel}</b>`
-      + ` ｜ 耗时：检索 <b>${t.retrieve_ms}ms</b> / 生成 <b>${t.generate_ms}ms</b> / 合计 <b>${t.total_ms}ms</b>`;
+      + ` ｜ 精排后端：<b>${rkLabel}</b><br>`
+      + `耗时分解：检索 <b>${t.retrieve_ms}ms</b>`
+      + ` / 生成 <b>${t.generate_ms}ms</b>`
+      + ` / 歧义判定 <b>${t.ambiguity_ms}ms</b>（LLM）`
+      + ` → 后端合计 <b>${t.total_ms}ms</b>`
+      + ` ｜ 真实往返 <b>${roundtrip}ms</b>`
+      + (gap > 300 ? ` <span style="color:#d29922">(差 ${gap}ms = 网络/HTTP 开销)</span>` : '');
 
     // 精排前后变化标记
     const before = new Map(d.candidates.map(x=>[x.source+'#'+x.chunk_index, x.rank]));

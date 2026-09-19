@@ -19,6 +19,7 @@ class OllamaEmbedding(BaseEmbedding):
         self._model = settings.embedding_model
         self._batch_size = settings.embedding_batch_size
         self._dim = settings.embedding_dim
+        self._keep_alive = settings.ollama_keep_alive
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         result: list[list[float]] = []
@@ -31,7 +32,9 @@ class OllamaEmbedding(BaseEmbedding):
     async def _embed_batch(self, client: httpx.AsyncClient, texts: list[str]) -> list[list[float]]:
         resp = await client.post(
             f"{self._base_url}/api/embed",
-            json={"model": self._model, "input": texts},
+            # keep_alive 随请求下发（而非只依赖 ollama serve 的环境变量）：
+            # Ollama 默认空闲 5 分钟就卸载模型，之后第一个请求要重载（实测多等 ~2.5s）。
+            json={"model": self._model, "input": texts, "keep_alive": self._keep_alive},
         )
         resp.raise_for_status()
         embeddings = resp.json().get("embeddings", [])

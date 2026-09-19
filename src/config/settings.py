@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # （见 scripts/start_demo.py 的 OLLAMA_HOST，规避 Windows 保留端口段），
     # 所以 .env 必须显式设 OLLAMA_BASE_URL=http://localhost:11451，否则连不上。
     ollama_base_url: str = "http://localhost:11434"
+    # 空闲多久后允许 Ollama 卸载 embedding 模型。Ollama 默认 5m，代价是
+    # **每次隔一会儿再问，第一个请求要重载模型（实测多等 ~2.5 秒）**。
+    # 折中取 30m：短暂离开回来不用等，长时间闲置仍会释放显存（bge-m3 约 660MB）。
+    # 取值：Go duration 字符串（"30m"/"1h"）或秒数；-1 = 常驻不卸载（显存换延迟）。
+    ollama_keep_alive: str = "30m"
     embedding_model: str = "bge-m3"
     embedding_dim: int = 1024
     embedding_batch_size: int = 16

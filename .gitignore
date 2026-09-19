@@ -8,10 +8,13 @@ CLAUDE.md
 .claude/
 
 # ===== 本地留存的开发文档（不上传，见 docs/README.md）=====
+# ⚠️ 本组规则按「精确路径」排除：一旦移动这些文件，规则即失效
+#    → 它们会变成「未忽略」，下次 git add docs/ 会直接推上公共仓库。
+#    需要移动时，必须同步修改本文件。
 docs/改进计划.md
-docs/RAG生产化回顾.md
+docs/优化方案.md
+docs/交流区.md
 docs/资源规划.md
-docs/评估报告.md
 
 # ===== 本地启动脚本（含机器绝对路径，不上传）=====
 # 这类脚本硬编码了本机路径（Miniforge3 / Docker / Ollama），

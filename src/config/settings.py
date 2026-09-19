@@ -20,9 +20,14 @@ class Settings(BaseSettings):
     # LLM（DeepSeek 云 API）
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model: str = "deepseek-chat"
+    # 默认值需与 .env.example 一致：此处曾遗留 "deepseek-chat"（旧模型名，项目实际不用），
+    # 照默认跑会静默用错模型。
+    deepseek_model: str = "deepseek-v4-flash"
 
     # Embedding（本地 Ollama）
+    # ⚠️ 默认 11434 是 Ollama 标准端口；本项目实际把 Ollama 跑在 11451
+    # （见 scripts/start_demo.py 的 OLLAMA_HOST，规避 Windows 保留端口段），
+    # 所以 .env 必须显式设 OLLAMA_BASE_URL=http://localhost:11451，否则连不上。
     ollama_base_url: str = "http://localhost:11434"
     embedding_model: str = "bge-m3"
     embedding_dim: int = 1024

@@ -68,8 +68,12 @@ class Settings(BaseSettings):
     rerank_candidates: int = 20        # 粗排召回的候选数（精排后取 top_k）
     rerank_snippet_chars: int = 300    # 送进精排时每条的截断长度（控成本）
 
-    # 精排后端：llm = 云端 LLM（实测 ~9 秒/次）｜ local = 本地 cross-encoder（~0.1 秒、确定性）
-    rerank_backend: str = "llm"
+    # 精排后端：local = 本地 cross-encoder（**默认**）｜ llm = 云端 LLM（**备用兜底**）
+    # 默认 local 的理由：确定性输出、无网络依赖、延迟可预期，且**不受推理模型
+    #   "思考吃满 max_tokens 导致 content 为空"的影响**（2026-09-19 实测：llm 后端在推理
+    #   模型下曾静默空转，精排退化成粗排顺序却毫无报错）。
+    # 何时切 llm：本地模型未下载 / 显存不足 / 需要对比评测时，显式设 RERANK_BACKEND=llm。
+    rerank_backend: str = "local"
     rerank_local_model: str = "BAAI/bge-reranker-base"
     rerank_local_device: str = ""      # 空 = 自动（有 CUDA 用 cuda，否则 cpu）
 

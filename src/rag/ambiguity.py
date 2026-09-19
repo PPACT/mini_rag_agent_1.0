@@ -99,6 +99,12 @@ async def check_ambiguity(question: str, chunks: list[Chunk]) -> AmbiguityResult
             temperature=0,  # 判定必须可复现：同一候选集应给出同一结论
         )
         result = parse_result(raw)
+        if not _JSON_OBJ.search(raw or ""):
+            # ⚠️ 空输出/不可解析 ≠ "判定为无歧义"，但 parse_result 会静默回退成后者。
+            # 必须单独记一笔，否则"模型没答"与"模型答了：没歧义"在日志里无法区分
+            # （实测：推理模型思考吃满 max_tokens 时必然发生，且直接造成漏报）。
+            audit("ambiguity_unparsed", question=question,
+                  raw_len=len(raw or ""), snippet=settings.ambiguity_snippet_chars)
         audit("ambiguity_check", question=question, ambiguous=result.ambiguous, options=len(result.options))
         return result
     except Exception as e:  # noqa: BLE001

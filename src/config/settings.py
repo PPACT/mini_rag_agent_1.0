@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     # 提到 100 仅多 ~3ms 即可恢复满召回 —— 默认值会静默降低检索质量。
     hnsw_ef_search: int = 100
 
+    # LLM 思考链（DeepSeek 推理模型专用开关）
+    # 实测（2026-09-19）：**判定/精排这类分类任务，开思考是有害的** ——
+    #   ① 思考（reasoning_content）与结论（content）**共用 max_tokens 预算**，
+    #      思考一旦吃满预算 → finish_reason=length、content 为空 →
+    #      parse_result("") 会**静默返回"不歧义"** → 漏报（实测有歧义题被整题漏掉）。
+    #   ② 慢：开思考 4~10 秒 ｜ 关掉 0.7~1.4 秒。
+    # ⚠️ litellm 语义坑：DeepSeek 的 `reasoning_effort` **除 "none" 外都是开启思考**——
+    #    传 "low" 不是"少思考"，而是"开启思考"。要关只有 "none"。
+    llm_thinking_enabled: bool = False
+
     # 歧义判定（避免"候选互相矛盾却擅自选一个"）
     ambiguity_check_enabled: bool = True
     ambiguity_source_threshold: int = 3   # top-K 来自 >=N 个不同来源才触发 LLM 判定（省调用）

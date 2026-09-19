@@ -52,6 +52,10 @@ class LLMReranker(BaseReranker):
             )
             order = self._parse(raw, len(chunks))
             audit("rerank", query=query, candidates=len(chunks), reordered=bool(order))
+            if not order:
+                # ⚠️ 解析不到编号（如模型返回空）≠ "模型确认原顺序"。两者以前记录得一模一样，
+                # 导致精排整段静默空转还看着正常（实测：推理模型思考吃满预算时必然发生）。
+                audit("rerank_empty", query=query, candidates=len(chunks), raw_len=len(raw or ""))
         except Exception as e:  # noqa: BLE001
             # 精排是"锦上添花"，失败不能拖垮检索主链路 → 回退到粗排顺序
             audit("rerank_failed", query=query, error=str(e))

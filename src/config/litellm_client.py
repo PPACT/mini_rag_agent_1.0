@@ -16,6 +16,13 @@ async def complete(messages: list[dict], temperature: float = 0.1) -> str:
     if not settings.deepseek_api_key:
         raise RuntimeError("DEEPSEEK_API_KEY 未配置，请先在 .env 填入")
 
+    # 思考链：默认关闭。判定/精排都是分类任务，思考**既慢又会让 content 为空**
+    # （思考与 content 共用 max_tokens 预算，吃满则 content 为空 → 调用方静默拿到空串）。
+    extra: dict = {}
+    if not settings.llm_thinking_enabled:
+        # DeepSeek 语义：reasoning_effort 除 "none" 外都是**开启**思考（传 "low" 也是开）。
+        extra["reasoning_effort"] = "none"
+
     resp = await litellm.acompletion(
         model=f"deepseek/{settings.deepseek_model}",
         messages=messages,
@@ -24,5 +31,8 @@ async def complete(messages: list[dict], temperature: float = 0.1) -> str:
         temperature=temperature,
         max_tokens=2048,
         timeout=60,  # 请求超时（秒）
+        # 换用不支持该参数的模型时，让 litellm 丢掉它而不是直接报错
+        drop_params=True,
+        **extra,
     )
     return resp.choices[0].message.content or ""

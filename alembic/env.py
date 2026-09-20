@@ -1,3 +1,4 @@
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -17,7 +18,12 @@ config = context.config
 # 从项目 settings 读取数据库连接（不写死在 alembic.ini）
 from src.config.settings import get_settings  # noqa: E402
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# 两库分离后，**迁移必须对每个库各跑一次**（见 scripts/migrate_all.py）。
+# 用 ALEMBIC_DATABASE_URL 覆盖目标库；不设时回落到默认（真实库）。
+config.set_main_option(
+    "sqlalchemy.url",
+    os.environ.get("ALEMBIC_DATABASE_URL") or get_settings().database_url,
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

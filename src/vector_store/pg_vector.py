@@ -33,7 +33,17 @@ class PgVectorStore(VectorStore):
 
     - 向量检索：embedding 以字符串字面量 + `::vector` 传入（asyncpg 无原生 vector 类型）
     - 词法检索：`content_tsv`（Python 侧 jieba 分词后写入）+ ts_rank
+    - **两库分离**：实例绑定一个 kb（真实 / 压测），所有查询走该库的连接池
     """
+
+    def __init__(self, kb: str) -> None:
+        """绑定知识库。
+
+        ⚠️ `kb` **必填**——见 `src/db/kb.py`：给默认值会让"忘传"静默落到真实库。
+        """
+        from src.db.kb import validate
+
+        self._kb = validate(kb)
 
     @staticmethod
     def _vec_str(embedding: list[float]) -> str:
@@ -123,7 +133,7 @@ class PgVectorStore(VectorStore):
         return sql, [tsquery, *params, *wparams, top_k]
 
     async def search(self, embedding: list[float], filters: AccessFilter, top_k: int) -> list[Chunk]:
-        pool = await get_pool()
+        pool = await get_pool(self._kb)
         sql, params = self._build_search_sql(self._vec_str(embedding), filters, top_k)
         rows = await pool.fetch(sql, *params)
         return [_row_to_chunk(r) for r in rows]
@@ -137,14 +147,14 @@ class PgVectorStore(VectorStore):
         tsquery = " | ".join(tokenize(query).split())  # OR 语义，靠 ts_rank 排序
         if not tsquery:
             return []
-        pool = await get_pool()
+        pool = await get_pool(self._kb)
         sql, params = self._build_lexical_sql(tsquery, filters, top_k)
         rows = await pool.fetch(sql, *params)
         return [_row_to_chunk(r) for r in rows]
 
     async def replace_document(self, document_id: str, chunks: list[Chunk], embeddings: list[list[float]]) -> None:
         """同一事务内：先删旧 chunk，再插新 chunk。"""
-        pool = await get_pool()
+        pool = await get_pool(self._kb)
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute("DELETE FROM chunks WHERE document_id = $1::uuid", document_id)
@@ -173,9 +183,9 @@ class PgVectorStore(VectorStore):
 
     async def delete_by_document(self, document_id: str) -> None:
         """物理删除某文档的全部向量（软删由 documents.is_deleted 负责）。"""
-        pool = await get_pool()
+        pool = await get_pool(self._kb)
         await pool.execute("DELETE FROM chunks WHERE document_id = $1::uuid", document_id)
 
     async def count(self) -> int:
-        pool = await get_pool()
+        pool = await get_pool(self._kb)
         return int(await pool.fetchval("SELECT count(*) FROM chunks"))

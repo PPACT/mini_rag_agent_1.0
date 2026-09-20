@@ -38,6 +38,7 @@ async def retrieve(
     departments: list[str] | None,
     secret_level: int | None,
     *,
+    kb: str,
     use_rewrite: bool | None = None,
     use_rerank: bool | None = None,
     use_hybrid: bool | None = None,
@@ -48,6 +49,8 @@ async def retrieve(
 
     各开关 None 时读配置；显式传 False 可跑基线（评测对比用）。
     trace: 传入 dict 时，会把中间结果写入（用于 WebUI 透视链路 / 排查精排误杀）。
+    kb: **必填**（真实 / 压测，见 `src/db/kb.py`）——不设默认值，忘传即报错，
+        绝不静默落到真实库。
     """
     settings = get_settings()
     if use_rewrite is None:
@@ -69,7 +72,7 @@ async def retrieve(
     embedding = get_embedding()
     query_vectors = await embedding.embed(queries)
 
-    store = get_vector_store()
+    store = get_vector_store(kb)
     filters = AccessFilter(departments=departments, secret_level_le=secret_level)
 
     ranked_lists: list[list[Chunk]] = []

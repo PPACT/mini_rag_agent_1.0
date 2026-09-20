@@ -1,10 +1,11 @@
 """PgVectorStore 的 AccessFilter→SQL 翻译单测（硬过滤默认路径）。"""
+from src.db.kb import KB_REAL
 from src.vector_store.base import AccessFilter
 from src.vector_store.pg_vector import PgVectorStore
 
 
 def test_build_search_sql_no_filter():
-    store = PgVectorStore()
+    store = PgVectorStore(KB_REAL)
     sql, params = store._build_search_sql("[0.1,0.2]", AccessFilter(), 5)
     assert "d.is_deleted = false" in sql
     assert "c.department = ANY" not in sql
@@ -14,7 +15,7 @@ def test_build_search_sql_no_filter():
 
 
 def test_build_search_sql_with_filters():
-    store = PgVectorStore()
+    store = PgVectorStore(KB_REAL)
     sql, params = store._build_search_sql(
         "[0.1,0.2]", AccessFilter(departments=["IT"], secret_level_le=3), 5
     )
@@ -26,7 +27,7 @@ def test_build_search_sql_with_filters():
 
 
 def test_build_search_sql_department_only():
-    store = PgVectorStore()
+    store = PgVectorStore(KB_REAL)
     sql, params = store._build_search_sql("[0.1,0.2]", AccessFilter(departments=["IT"]), 5)
     assert "c.department = ANY($2)" in sql
     assert "c.secret_level <=" not in sql

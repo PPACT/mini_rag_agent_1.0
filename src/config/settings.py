@@ -38,8 +38,20 @@ class Settings(BaseSettings):
     embedding_dim: int = 1024
     embedding_batch_size: int = 16
 
-    # PostgreSQL + pgvector
-    database_url: str = "postgresql://rag:rag_demo_pwd@localhost:5432/rag_demo"
+    # PostgreSQL + pgvector —— **两库分离**：真实业务库 / 压测库
+    # 背景：合成评测语料含 624 篇"近重复干扰"，与真实文档同库会**淹没真实答案**（详见交流区 §1.6）。
+    # kb 取值见 `src/db/kb.py`，**必填、无默认**（有默认就会"忘传 → 静默落真实库"）。
+    # 端口与 docker-compose 保持一致（15432 真实 / 15433 压测）。
+    database_url: str = "postgresql://rag:rag_demo_pwd@localhost:15432/rag_real"
+    database_url_stress: str = "postgresql://rag:rag_demo_pwd@localhost:15433/rag_stress"
+
+    def db_url(self, kb: str) -> str:
+        """按 kb 取连接串。**无默认分支**——未知 kb 必须抛错，不能回退。"""
+        from src.db.kb import KB_REAL, KB_STRESS, validate
+
+        validate(kb)
+        return self.database_url if kb == KB_REAL else self.database_url_stress
+
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

@@ -24,6 +24,7 @@ sys.path.insert(0, str(EVAL_DIR.parent))
 
 from run_eval import EVAL_DEPARTMENT, EVAL_SECRET_LEVEL  # noqa: E402
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 
 DATASET = EVAL_DIR / "dataset_clear.jsonl"
@@ -45,7 +46,7 @@ async def main() -> None:
         async with sem:
             # 关精排：看候选池原貌（RRF 融合后的前 POOL_K）
             _, chunks = await retrieve(
-                row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL,
+                row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, kb=KB_STRESS,
                 use_rerank=False, top_k=POOL_K,
             )
         positions = [i for i, c in enumerate(chunks, 1) if c.source_file == row["source"]]

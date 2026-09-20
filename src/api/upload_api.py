@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from src.auth.deps import User, get_current_user
 from src.config.settings import get_settings
 from src.db.connection import get_pool
+from src.db.kb import KB_REAL, validate
 from src.schemas.document import DocumentStatus, UploadResponse
 from src.tasks.queue import enqueue_process_document
 
@@ -22,13 +23,19 @@ async def upload_document(
     file: UploadFile = File(...),
     secret_level: int = Form(0),
     document_id: str | None = Form(None),
+    kb: str = Form(KB_REAL),
     user: User = Depends(get_current_user),
 ) -> UploadResponse:
     """上传文档：落盘 -> 写 documents(pending) -> 入队异步处理。
 
     department 取自鉴权 token（服务端身份）；secret_level 为文档密级（表单），
     校验不能超过上传者自己的密级。传 document_id 则更新已有文档（version+1 替换 chunk）。
+
+    kb: 目标知识库（真实 / 压测），**默认真实库**——这是**唯一允许出现默认值的地方**：
+        "默认写哪个库"属 API 契约，必须显式可见、可被调用方覆盖；
+        库层（connection / store / worker）一律**必填无默认**（见 `src/db/kb.py`）。
     """
+    kb = validate(kb)
     settings = get_settings()
     ext = file.filename.lower().rsplit(".", 1)[-1] if "." in (file.filename or "") else ""
     if ext not in _ALLOWED:
@@ -59,7 +66,7 @@ async def upload_document(
         limit_mb = settings.max_upload_size // (1024 * 1024)
         raise HTTPException(status_code=413, detail=f"文件超过大小限制 {limit_mb}MB")
 
-    pool = await get_pool()
+    pool = await get_pool(kb)
     if document_id:
         # 更新已有文档：版本号 +1，替换 chunk（worker 会删旧插新）
         updated_id = await pool.fetchval(
@@ -75,7 +82,7 @@ async def upload_document(
         doc_id = await pool.fetchval(
             "INSERT INTO documents (filename, status) VALUES ($1, 'pending') RETURNING id::text", filename
         )
-    await enqueue_process_document(doc_id, user.department, secret_level)
+    await enqueue_process_document(kb, doc_id, user.department, secret_level)
     return UploadResponse(document_id=doc_id, status="pending")
 
 
@@ -85,7 +92,7 @@ async def get_document_status(
     user: User = Depends(get_current_user),
 ) -> DocumentStatus:
     """查询文档处理状态（需鉴权）。"""
-    pool = await get_pool()
+    pool = await get_pool(kb)
     row = await pool.fetchrow(
         "SELECT id::text AS document_id, filename, status, chunk_count, error FROM documents WHERE id = $1::uuid",
         document_id,

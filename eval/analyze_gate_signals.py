@@ -30,6 +30,7 @@ sys.path.insert(0, str(EVAL_DIR))
 sys.path.insert(0, str(EVAL_DIR.parent))
 
 from src.db.connection import close_pool, get_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 
 DEPTS = ["IT", "公司"]
@@ -50,7 +51,7 @@ def _cos(a: str, b: str) -> float:
 
 async def _signals(question: str, sem: asyncio.Semaphore, pool) -> dict | None:
     async with sem:
-        _, chunks = await retrieve(question, DEPTS, LEVEL, use_rerank=True, top_k=TOP_K)
+        _, chunks = await retrieve(question, DEPTS, LEVEL, kb=KB_STRESS, use_rerank=True, top_k=TOP_K)
     if len(chunks) < 2:
         return None
     ids = [c.id for c in chunks if c.id]
@@ -99,7 +100,7 @@ async def main() -> None:
 
     print("计算三组信号（生产配置：开精排）...", flush=True)
     sem = asyncio.Semaphore(CONCURRENCY)
-    pool = await get_pool()
+    pool = await get_pool(KB_STRESS)
     groups = {k: await _run_group(k, v, sem, pool) for k, v in groups_q.items()}
 
     print(f"\n{'信号':<14}{'不歧义组':<16}{'歧义组':<16}{'对抗组':<16}{'区分度'}")

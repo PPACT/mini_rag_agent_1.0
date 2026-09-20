@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.db.connection import close_pool, get_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.embedding.base import get_embedding  # noqa: E402
 
 DATASET = Path(__file__).resolve().parent / "dataset_clear.jsonl"
@@ -73,7 +74,7 @@ async def main() -> None:
     vectors = await embedding.embed(questions)
     print(f"{len(questions)} 条 query，K={args.k}\n")
 
-    pool = await get_pool()
+    pool = await get_pool(KB_STRESS)
     async with pool.acquire() as conn:
         # 现状信息
         total = await conn.fetchval("SELECT count(*) FROM chunks")

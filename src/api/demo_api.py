@@ -21,6 +21,7 @@ from src.agent.graph_builder import get_agent
 from src.auth.deps import DEMO_USERS
 from src.config.prompts import load_templates
 from src.config.settings import get_settings
+from src.db.kb import KB_REAL, KB_STRESS, validate
 from src.rag.ambiguity import check_ambiguity
 from src.rag.retriever import retrieve
 from src.vector_store.base import Chunk
@@ -41,6 +42,9 @@ def _brief(c: Chunk, rank: int) -> dict:
 class AskRequest(BaseModel):
     question: str
     token: str = "demo-it-token"
+    # 目标知识库（真实 / 压测）。演示页可切换；**默认真实库**，
+    # 与 /chat 保持一致（演示页也能看真实库）。压测库需显式选择。
+    kb: str = KB_REAL
     use_hybrid: bool = True
     use_rerank: bool = True
     with_answer: bool = True
@@ -54,11 +58,15 @@ async def demo_ask(req: AskRequest) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="无效 token")
     departments = list({user.department, settings.company_scope})
+    try:
+        kb = validate(req.kb)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     trace: dict = {}
     t0 = time.perf_counter()
     _, chunks = await retrieve(
-        req.question, departments, user.secret_level,
+        req.question, departments, user.secret_level, kb=kb,
         use_hybrid=req.use_hybrid, use_rerank=req.use_rerank, trace=trace,
     )
     retrieve_ms = int((time.perf_counter() - t0) * 1000)
@@ -93,6 +101,7 @@ async def demo_ask(req: AskRequest) -> dict:
 
     return {
         "question": req.question,
+        "kb": kb,                       # 本次查询的实际知识库（页面显示，防"看错库"）
         "user": {"name": user.name, "department": user.department, "scope": departments},
         "mode": trace.get("mode", {}),
         # 当前精排后端（供页面显示：LLM 还是本地 cross-encoder）
@@ -171,6 +180,10 @@ DEMO_HTML = """<!DOCTYPE html>
   <div class="card">
     <div class="row">
       <input id="q" type="text" placeholder="例：远程办公得提前几天在OA上申请？" value="远程办公得提前几天在OA上申请？">
+      <select id="kb" title="知识库：真实业务库 / 压测库（合成语料）">
+        <option value="real">📗 真实库 rag_real</option>
+        <option value="stress">🧪 压测库 rag_stress</option>
+      </select>
       <select id="token">
         <option value="demo-it-token">IT 用户（张三）</option>
         <option value="demo-hr-token">HR 用户（李四）</option>
@@ -210,7 +223,7 @@ $('#go').onclick = async () => {
     const r = await fetch('/demo/ask', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        question: $('#q').value, token: $('#token').value,
+        question: $('#q').value, token: $('#token').value, kb: $('#kb').value,
         use_hybrid: $('#hybrid').checked, use_rerank: $('#rerank').checked,
         with_answer: $('#answer').checked
       })
@@ -225,7 +238,9 @@ $('#go').onclick = async () => {
         ? `本地 cross-encoder <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`
         : `LLM <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`;
     const gap = roundtrip - t.total_ms;
-    $('#meta').innerHTML = `可见范围 <b>${esc(d.user.scope.join(' + '))}</b>`
+    const kbLabel = d.kb === 'stress' ? '🧪 压测库 rag_stress' : '📗 真实库 rag_real';
+    $('#meta').innerHTML = `知识库 <b>${kbLabel}</b>`
+      + ` ｜ 可见范围 <b>${esc(d.user.scope.join(' + '))}</b>`
       + ` ｜ 精排后端：<b>${rkLabel}</b><br>`
       + `耗时分解：检索 <b>${t.retrieve_ms}ms</b>`
       + ` / 生成 <b>${t.generate_ms}ms</b>`

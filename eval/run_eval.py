@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 from src.vector_store.base import Chunk  # noqa: E402
 
@@ -70,7 +71,7 @@ async def rank_all(dataset: list[dict], top: int, **kw) -> list[int | None]:
     async def one(row: dict) -> int | None:
         async with sem:
             _, chunks = await retrieve(
-                row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, top_k=top, **kw
+                row["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, kb=KB_STRESS, top_k=top, **kw
             )
         return first_hit_rank(chunks, row["answer_span"], row["source"])
 

@@ -12,10 +12,15 @@ from src.embedding.base import get_embedding
 from src.vector_store.base import Chunk, get_vector_store
 
 
-async def process_document(ctx: dict, document_id: str, department: str | None = None, secret_level: int = 0) -> None:
-    """后台任务：解析 -> 结构化切块 -> 向量化 -> 原子写库 -> 更新状态。"""
+async def process_document(
+    ctx: dict, kb: str, document_id: str, department: str | None = None, secret_level: int = 0
+) -> None:
+    """后台任务：解析 -> 结构化切块 -> 向量化 -> 原子写库 -> 更新状态。
+
+    `kb` 由入队时确定（真实 / 压测），决定**读文档状态与写切片**都落在哪个库。
+    """
     settings = get_settings()
-    pool = await get_pool()
+    pool = await get_pool(kb)
 
     row = await pool.fetchrow(
         "SELECT id, filename, version FROM documents WHERE id = $1::uuid", document_id
@@ -54,7 +59,7 @@ async def process_document(ctx: dict, document_id: str, department: str | None =
             for i, tc in enumerate(text_chunks)
         ]
 
-        store = get_vector_store()
+        store = get_vector_store(kb)
         await store.replace_document(document_id, chunk_objs, vectors)
 
         await pool.execute(

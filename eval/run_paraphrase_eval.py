@@ -22,6 +22,7 @@ sys.path.insert(0, str(EVAL_DIR.parent))
 
 from run_eval import EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, first_hit_rank  # noqa: E402
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 
 DATASET = EVAL_DIR / "dataset_paraphrase.jsonl"
@@ -35,7 +36,7 @@ def load_rows() -> list[dict]:
 async def _retrieve_one(q: str, top: int, sem: asyncio.Semaphore) -> tuple[list[str], str | None]:
     """返回 (top-k 来源列表, top-1 来源)。走生产配置（混合+精排，改写已关）。"""
     async with sem:
-        _, chunks = await retrieve(q, EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, top_k=top)
+        _, chunks = await retrieve(q, EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, kb=KB_STRESS, top_k=top)
     return [c.source_file for c in chunks], (chunks[0].source_file if chunks else None)
 
 

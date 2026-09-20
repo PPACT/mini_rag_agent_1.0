@@ -1,17 +1,46 @@
 services:
+  # ===== 真实业务库（rag_real）—— 业务入口 /chat 固定用它 =====
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: rag_demo_pg
+    container_name: rag_real_pg
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rag}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_demo_pwd}
-      POSTGRES_DB: ${POSTGRES_DB:-rag_demo}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_real}
     ports:
       - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-rag_demo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-rag_real}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ===== 压测库（rag_stress）—— 合成评测语料，**可随时重建** =====
+  # 为什么独立容器（而非同库两张表）：见 docs/交流区.md §1.6。
+  #   ① 物理隔离 → 压测怎么折腾都碰不到真实数据；② 可整库丢弃重建；
+  #   ③ 将来真实库单独迁 Milvus 时，压测库留在 PG 不受影响。
+  #
+  # ⚠️ profiles: ["stress"] —— 日常 `docker compose up -d` **不会**启动它（开销为 0）。
+  #    要跑压测/评测时才：docker compose --profile stress up -d
+  postgres-stress:
+    image: pgvector/pgvector:pg17
+    container_name: rag_stress_pg
+    profiles: ["stress"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_demo_pwd}
+      POSTGRES_DB: ${POSTGRES_STRESS_DB:-rag_stress}
+    ports:
+      # 15433 —— 与真实库的 15432 分开，**绝不占用真实库端口**
+      - "${POSTGRES_STRESS_PORT:-15433}:5432"
+    volumes:
+      - pgdata_stress:/var/lib/postgresql/data
+    # 压测库是一次性环境：给它封顶，别让压测把整机内存吃掉
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_STRESS_DB:-rag_stress}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -33,4 +62,5 @@ services:
 
 volumes:
   pgdata:
+  pgdata_stress:
   redisdata:

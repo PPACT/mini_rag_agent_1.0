@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.db.connection import close_pool, get_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 from src.vector_store.base import Chunk  # noqa: E402
 
@@ -41,7 +42,8 @@ async def rank_all(dataset: list[dict], departments, top: int, sem: asyncio.Sema
     async def one(row: dict) -> int | None:
         async with sem:
             _, chunks = await retrieve(
-                row["question"], departments, 3, use_rewrite=False, use_rerank=False, top_k=top
+                row["question"], departments, 3, kb=KB_STRESS,
+                use_rewrite=False, use_rerank=False, top_k=top
             )
         return first_hit_rank(chunks, row["answer_span"], row["source"])
 
@@ -63,7 +65,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     rows = [json.loads(l) for l in DATASET.read_text(encoding="utf-8").splitlines() if l.strip()]
-    pool = await get_pool()
+    pool = await get_pool(KB_STRESS)
     total = await pool.fetchval("SELECT count(*) FROM chunks")
     in_scope = await pool.fetchval(
         "SELECT count(*) FROM chunks WHERE department = ANY($1)", [args.dept, COMPANY_SCOPE]

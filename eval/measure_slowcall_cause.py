@@ -34,6 +34,7 @@ import litellm  # noqa: E402
 from src.config.prompts import load_ambiguity_check_templates  # noqa: E402
 from src.config.settings import get_settings  # noqa: E402
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.ambiguity import _format_candidates  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 
@@ -73,7 +74,7 @@ async def main() -> None:
     print(f"挑 {N_SLOW} 慢 + {N_FAST} 快，重建候选池并对比 max_tokens 2048 vs 256\n", flush=True)
     pool = {}
     for qid, _, _ in picked:
-        _, chunks = await retrieve(qmap[qid], DEPTS, LEVEL, top_k=5)
+        _, chunks = await retrieve(qmap[qid], DEPTS, LEVEL, kb=KB_STRESS, top_k=5)
         pool[qid] = chunks
 
     sys_tpl, human_tpl = load_ambiguity_check_templates()

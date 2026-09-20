@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config.settings import get_settings  # noqa: E402
 from src.db.connection import close_pool, get_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.document_parser.loader import load_text  # noqa: E402
 from src.document_parser.semantic_splitter import split_text  # noqa: E402
 from src.embedding.base import get_embedding  # noqa: E402
@@ -58,15 +59,15 @@ def collect_files(exclude_dept: bool) -> list[Path]:
 
 async def truncate() -> None:
     """清空评测数据（documents / chunks）。"""
-    pool = await get_pool()
+    pool = await get_pool(KB_STRESS)
     await pool.execute("TRUNCATE documents, chunks CASCADE")
 
 
 async def ingest(exclude_dept: bool = False) -> int:
     """灌入语料，返回切片总数。供 CLI 与评测脚本复用。"""
     settings = get_settings()
-    pool = await get_pool()
-    store = get_vector_store()
+    pool = await get_pool(KB_STRESS)
+    store = get_vector_store(KB_STRESS)
     embedding = get_embedding()
 
     files = collect_files(exclude_dept)

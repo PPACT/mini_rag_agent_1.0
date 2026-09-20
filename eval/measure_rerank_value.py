@@ -24,6 +24,7 @@ sys.path.insert(0, str(EVAL_DIR.parent))
 
 from run_eval import EVAL_DEPARTMENT, EVAL_SECRET_LEVEL  # noqa: E402
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 
 DATASET = EVAL_DIR / "dataset_clear.jsonl"
@@ -55,7 +56,7 @@ async def main() -> None:
     async def one(r: dict) -> None:
         trace: dict = {}
         async with sem:
-            await retrieve(r["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, trace=trace)
+            await retrieve(r["question"], EVAL_DEPARTMENT, EVAL_SECRET_LEVEL, kb=KB_STRESS, trace=trace)
         cand, final = trace.get("candidates", []), trace.get("final", [])
         pre = _hit_top1(cand, r["source"])
         post = _hit_top1(final, r["source"])

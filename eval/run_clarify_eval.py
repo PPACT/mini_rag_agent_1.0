@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.ambiguity import check_ambiguity, is_diverse  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 from src.config.settings import get_settings  # noqa: E402
@@ -43,7 +44,7 @@ def _load(path: Path) -> list[dict]:
 async def _one(row: dict, top: int, sem: asyncio.Semaphore, departments) -> tuple[dict, bool, bool]:
     settings = get_settings()
     async with sem:
-        _, chunks = await retrieve(row["question"], departments, EVAL_SECRET_LEVEL, top_k=top)
+        _, chunks = await retrieve(row["question"], departments, EVAL_SECRET_LEVEL, kb=KB_STRESS, top_k=top)
         gated = is_diverse(chunks, settings.ambiguity_source_threshold)
         result = await check_ambiguity(row["question"], chunks)
         return (row, gated, result.ambiguous)

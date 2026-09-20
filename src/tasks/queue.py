@@ -23,7 +23,13 @@ async def close_arq() -> None:
         _arq = None
 
 
-async def enqueue_process_document(document_id: str, department: str | None = None, secret_level: int = 0) -> None:
-    """入队文档处理任务（附带权限元数据）。"""
+async def enqueue_process_document(
+    kb: str, document_id: str, department: str | None = None, secret_level: int = 0
+) -> None:
+    """入队文档处理任务（附带知识库与权限元数据）。
+
+    ⚠️ `kb` **必填**（真实 / 压测）：worker 按它决定往哪个库写。
+    不设默认值——否则压测数据可能被**静默灌进真实库**。
+    """
     arq = await get_arq()
-    await arq.enqueue_job("process_document", document_id, department, secret_level)
+    await arq.enqueue_job("process_document", kb, document_id, department, secret_level)

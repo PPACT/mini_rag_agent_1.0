@@ -31,6 +31,7 @@ import litellm  # noqa: E402
 from src.config.prompts import load_ambiguity_check_templates  # noqa: E402
 from src.config.settings import get_settings  # noqa: E402
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.ambiguity import _format_candidates  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 
@@ -83,7 +84,7 @@ async def main() -> None:
     sys_tpl, human_tpl = load_ambiguity_check_templates()
 
     for qid, tag in TARGETS:
-        _, chunks = await retrieve(qmap[qid], DEPTS, 3, top_k=5)
+        _, chunks = await retrieve(qmap[qid], DEPTS, 3, kb=KB_STRESS, top_k=5)
         msgs = [
             {"role": "system", "content": sys_tpl},
             {"role": "user", "content": human_tpl.format(

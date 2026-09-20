@@ -32,6 +32,7 @@ sys.path.insert(0, str(EVAL_DIR.parent))
 
 from src.config.settings import get_settings  # noqa: E402
 from src.db.connection import close_pool  # noqa: E402
+from src.db.kb import KB_STRESS  # noqa: E402
 from src.rag.ambiguity import check_ambiguity, is_diverse  # noqa: E402
 from src.rag.retriever import retrieve  # noqa: E402
 
@@ -53,7 +54,7 @@ def _load(name: str) -> list[dict]:
 
 async def _build_pool(sem: asyncio.Semaphore, r: dict) -> tuple[str, list]:
     async with sem:
-        _, chunks = await retrieve(r["question"], DEPTS, LEVEL, top_k=5)
+        _, chunks = await retrieve(r["question"], DEPTS, LEVEL, kb=KB_STRESS, top_k=5)
     return r["id"], chunks
 
 

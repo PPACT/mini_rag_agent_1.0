@@ -67,17 +67,26 @@ class VectorStore(ABC):
         return []
 
 
-def get_vector_store() -> VectorStore:
-    """根据 settings.vector_store 返回实现（pgvector | milvus）。"""
-    from src.config.settings import get_settings
+def get_vector_store(kb: str) -> VectorStore:
+    """按 knowledge base 返回实现（pgvector | milvus）。
 
+    ⚠️ `kb` **必填**（真实 / 压测，见 `src/db/kb.py`）——不设默认值，
+    否则"忘传"会静默落到真实库。
+
+    两库分离也让"**真实库单独换引擎**"成为可能：将来真实库迁 Milvus、压测库留 PG，
+    只需按 kb 返回不同实现（这正是用户规划的"双库可切换"）。
+    """
+    from src.config.settings import get_settings
+    from src.db.kb import validate
+
+    validate(kb)
     store_type = get_settings().vector_store.lower()
     if store_type == "pgvector":
         from src.vector_store.pg_vector import PgVectorStore
 
-        return PgVectorStore()
+        return PgVectorStore(kb)
     if store_type == "milvus":
         from src.vector_store.milvus import MilvusStore
 
-        return MilvusStore()
+        return MilvusStore(kb)
     raise ValueError(f"未知向量库类型: {store_type}")

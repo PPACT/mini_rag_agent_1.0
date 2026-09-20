@@ -89,9 +89,16 @@ async def upload_document(
 @router.get("/{document_id}", response_model=DocumentStatus)
 async def get_document_status(
     document_id: str,
+    kb: str = KB_REAL,
     user: User = Depends(get_current_user),
 ) -> DocumentStatus:
-    """查询文档处理状态（需鉴权）。"""
+    """查询文档处理状态（需鉴权）。
+
+    kb: 文档所在的知识库（真实 / 压测），**默认真实库**，与上传接口一致。
+        文档只存在于某一个库中，故由调用方指明；**不做跨库查找**——
+        跨库查找等于隐式回退，会掩盖"传错库"这类错误。
+    """
+    kb = validate(kb)
     pool = await get_pool(kb)
     row = await pool.fetchrow(
         "SELECT id::text AS document_id, filename, status, chunk_count, error FROM documents WHERE id = $1::uuid",

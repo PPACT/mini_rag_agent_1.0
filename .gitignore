@@ -17,6 +17,7 @@ docs/交流区.md
 docs/交流协议.md
 docs/交流区归档.md
 docs/资源规划.md
+docs/RAG 管线调参与评估检查清单.md
 
 # ===== 本地启动脚本（含机器绝对路径，不上传）=====
 # 这类脚本硬编码了本机路径（Miniforge3 / Docker / Ollama），

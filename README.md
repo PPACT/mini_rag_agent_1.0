@@ -15,6 +15,7 @@
 [![LangGraph][lg-shield]][lg-url]
 [![MCP][mcp-shield]][mcp-url]
 [![Docker][docker-shield]][docker-url]
+[![License: MIT][mit-shield]][mit-url]
 
 <br />
 
@@ -49,6 +50,7 @@
     <li><a href="#两库分离">两库分离（真实库 / 压测库）</a></li>
     <li><a href="#已知边界">已知边界</a></li>
     <li><a href="#文档与测试">文档与测试</a></li>
+    <li><a href="#license">License</a></li>
   </ol>
 </details>
 
@@ -170,15 +172,26 @@ docs/                 开发文档
 
 ## 配置
 
-复制 `.env.example` 为 `.env`，填入 `DEEPSEEK_API_KEY`。其余默认值可本地跑通。
+复制 `.env.example` 为 `.env`，填好 LLM 的 key。其余默认值可本地跑通。
+
+**LLM 不绑定特定厂商**：生成链路走 OpenAI 兼容接口（`ChatOpenAI`），判定 / 精排走 LiteLLM，
+两者读同一组配置。想换厂商，改 **base URL + 模型名 + provider 前缀** 即可。
 
 几个**必须显式设**的（默认值会连不上或走错）：
 
 | 键 | 说明 |
 |---|---|
-| `OLLAMA_BASE_URL` | 本项目跑在 `http://localhost:11451`（非默认 11434） |
-| `DEEPSEEK_API_KEY` | 空值 → `/chat` 直接返回 503（入库链路不受影响） |
+| `LLM_API_KEY` | **LLM 的 key**——任何 **OpenAI 兼容**服务都行，不限于 DeepSeek。空值 → `/chat` 返回 503（入库链路不受影响） |
+| `LLM_BASE_URL` | LLM 的 base URL，默认 `https://api.deepseek.com`。**指向别家的 OpenAI 兼容端点即可换厂商** |
+| `LLM_MODEL` | 模型名，默认 `deepseek-v4-flash` |
+| `LLM_PROVIDER` | LiteLLM 的**协议适配器**前缀（对应 `provider/model`），默认 `deepseek`。换厂商时改这里 ⚠️ **改后请复验一次判定调用** |
+| `OLLAMA_BASE_URL` | 本地 embedding 服务，本项目跑在 `http://localhost:11451`（**非默认 11434**） |
 | `RERANK_BACKEND` | `local`（默认）/ `llm`，见下节 |
+
+> ⚠️ **`LLM_PROVIDER` 为什么默认保持 `deepseek`**：思考链开关靠 `reasoning_effort="none"` 实现，
+> 而**该参数是 DeepSeek 语义**。若把它换成通用的 `openai/` 适配器，LiteLLM 可能因 `drop_params=True`
+> **静默丢弃它** → **思考链静默复活**（表现为判定空输出、精排空转、延迟飙升）。
+> 系统有 `thinking_leaked` 告警兜底，但**换 provider 后仍应复验一次判定调用**（目标：计数为 0）。
 
 鉴权用演示 token（真实系统替换为 JWT / SSO）：
 
@@ -308,6 +321,16 @@ PYTHONPATH=. python -m pytest tests/ -v
 
 ---
 
+---
+
+## License
+
+MIT —— 见 [`LICENSE`](LICENSE)。
+
+<p align="right">(<a href="#readme-top">回到顶部</a>)</p>
+
+---
+
 <!-- ============================================================
      链接定义：所有外部 URL 集中在此处。
      改链接 / 换徽章只动这里，正文不用碰。
@@ -331,6 +354,8 @@ PYTHONPATH=. python -m pytest tests/ -v
 [mcp-url]: https://modelcontextprotocol.io/
 [docker-shield]: https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white
 [docker-url]: https://www.docker.com/
+[mit-shield]: https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge
+[mit-url]: LICENSE
 
 <!-- 有截图后取消 README 顶部的注释，并把图放到被 git 跟踪的目录 -->
 [demo-screenshot]: docs/assets/demo.png

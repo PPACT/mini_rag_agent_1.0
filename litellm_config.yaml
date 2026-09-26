@@ -1,12 +1,23 @@
-# LiteLLM 路由配置（文档/示例：实际 LLM 经 langchain ChatOpenAI 调用，见 src/agent/graph_builder.py）
-# ⚠️ 模型名需与 .env 的 DEEPSEEK_MODEL 保持一致，避免过期。
-# 当前：LLM 走 DeepSeek 云 API；Embedding 走本地 Ollama（不经过 LiteLLM，直连 /api/embed）
+# ⚠️⚠️ 本文件**不被任何代码读取**（已 grep 确认：src/ eval/ scripts/ 无人引用它）。
+#      改它**不影响运行**。保留仅为「LiteLLM 路由配置的写法示例」。
+#
+# 真实生效的 LLM 配置在两处：
+#   · 生成链路   src/agent/graph_builder.py    （langchain ChatOpenAI + base_url）
+#   · 判定/精排  src/config/litellm_client.py  （litellm.acompletion）
+#   二者都读 src/config/settings.py ← .env 的 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL / LLM_PROVIDER
+#
+# 历史教训：本文件曾因未与代码同步而变成「过期文档」（见 docs/改进计划.md #10）。
+# 键名已同步为 LLM_*，但**它仍然不生效**——需要真配置请改 `.env`。
+#
+# 用途场景：将来若改用 **LiteLLM Proxy**（而不是在代码里直连），可照此配置。
 
 model_list:
   - model_name: deepseek-v4-flash
     litellm_params:
+      # 注意：这里是**代码里写死的那份示例值**；实际 provider 前缀由
+      # settings.llm_provider 决定（默认 deepseek，理由见 src/config/settings.py 注释）
       model: deepseek/deepseek-v4-flash
-      api_key: os.environ/DEEPSEEK_API_KEY
+      api_key: os.environ/LLM_API_KEY
       api_base: https://api.deepseek.com
       temperature: 0.1
       max_tokens: 2048

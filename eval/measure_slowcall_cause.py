@@ -53,8 +53,8 @@ def _load(name: str) -> list[dict]:
 async def _call(msgs: list[dict], max_tokens: int, s) -> tuple[float, int]:
     t0 = time.perf_counter()
     resp = await litellm.acompletion(
-        model=f"deepseek/{s.deepseek_model}", messages=msgs, api_key=s.deepseek_api_key,
-        api_base=s.deepseek_base_url, temperature=0, max_tokens=max_tokens, timeout=60,
+        model=f"{s.llm_provider}/{s.llm_model}", messages=msgs, api_key=s.llm_api_key,
+        api_base=s.llm_base_url, temperature=0, max_tokens=max_tokens, timeout=60,
     )
     ms = (time.perf_counter() - t0) * 1000
     return ms, len(resp.choices[0].message.content or "")

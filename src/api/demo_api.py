@@ -75,7 +75,7 @@ async def demo_ask(req: AskRequest) -> dict:
     final = trace.get("final", [])
     answer, cited, generate_ms = None, [], 0
 
-    if req.with_answer and settings.deepseek_api_key and final:
+    if req.with_answer and settings.llm_api_key and final:
         _, human_tpl = load_templates()
         ctx = "\n\n".join(
             f"[来源{i}] (文件:{c.source_file}, 块:{c.chunk_index})\n{c.content}"
@@ -108,7 +108,7 @@ async def demo_ask(req: AskRequest) -> dict:
         "rerank": {
             "backend": settings.rerank_backend,
             "model": (settings.rerank_local_model if settings.rerank_backend == "local"
-                      else settings.deepseek_model),
+                      else settings.llm_model),
         },
         "timings": {
             "retrieve_ms": retrieve_ms,      # 检索链路（含精排）

@@ -55,8 +55,8 @@ async def _probe(msgs: list[dict], max_tokens: int, extra: dict, s) -> None:
     t0 = time.perf_counter()
     try:
         resp = await litellm.acompletion(
-            model=f"deepseek/{s.deepseek_model}", messages=msgs, api_key=s.deepseek_api_key,
-            api_base=s.deepseek_base_url, temperature=0, max_tokens=max_tokens, timeout=120,
+            model=f"{s.llm_provider}/{s.llm_model}", messages=msgs, api_key=s.llm_api_key,
+            api_base=s.llm_base_url, temperature=0, max_tokens=max_tokens, timeout=120,
             **extra,
         )
     except Exception as e:  # noqa: BLE001
@@ -78,7 +78,7 @@ async def _probe(msgs: list[dict], max_tokens: int, extra: dict, s) -> None:
 
 async def main() -> None:
     s = get_settings()
-    print(f"模型 = {s.deepseek_model}\n")
+    print(f"模型 = {s.llm_model}\n")
     qmap = {str(r["id"]): r["question"]
             for r in _load("dataset_clear.jsonl") + _load("dataset_clarify.jsonl")}
     sys_tpl, human_tpl = load_ambiguity_check_templates()

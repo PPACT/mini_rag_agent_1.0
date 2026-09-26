@@ -67,8 +67,8 @@ async def chat(req: ChatRequest, user: User = Depends(get_current_user)) -> Chat
     department / secret_level 一律取自鉴权 token，不信任客户端参数。
     """
     settings = get_settings()
-    if not settings.deepseek_api_key:
-        raise HTTPException(status_code=503, detail="DEEPSEEK_API_KEY 未配置，请先在 .env 填入")
+    if not settings.llm_api_key:
+        raise HTTPException(status_code=503, detail="LLM_API_KEY 未配置，请先在 .env 填入")
 
     # 可见范围 = 公司级（全员）+ 本部门。缺少公司级会导致全员该看的制度被过滤掉。
     departments = list({user.department, settings.company_scope})

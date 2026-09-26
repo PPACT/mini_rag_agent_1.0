@@ -17,12 +17,22 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # LLM（DeepSeek 云 API）
-    deepseek_api_key: str = ""
-    deepseek_base_url: str = "https://api.deepseek.com"
+    # LLM —— **任何 OpenAI 兼容服务**（变量名刻意不带厂商前缀，便于换厂商）
+    # 生成链路走 ChatOpenAI + base_url，本来就是厂商中立的；
+    # 判定 / 精排走 LiteLLM，需要下面这个 provider 前缀。
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.deepseek.com"
     # 默认值需与 .env.example 一致：此处曾遗留 "deepseek-chat"（旧模型名，项目实际不用），
     # 照默认跑会静默用错模型。
-    deepseek_model: str = "deepseek-v4-flash"
+    llm_model: str = "deepseek-v4-flash"
+    # LiteLLM 用 `<provider>/<model>` 选**协议适配器**。
+    # ⚠️ **默认保持 "deepseek" 是刻意的，不是漏改**：
+    #    实测（`logs/verify_provider_unbind.py`，四组对照）——把前缀换成通用的 `openai/` 后，
+    #    `reasoning_effort="none"`（关思考）**被静默忽略** → 思考链复活：
+    #    实测 0 字思考 / 983ms  →  7298 字思考 / 11591ms，且 `finish_reason=length`
+    #    （思考吃满 max_tokens）→ **正是 7d16cc3 修掉的那个 bug 原样复现**。
+    #    换厂商时改这里，并**复验一次判定调用**——`litellm_client` 会打 `thinking_leaked` 告警兜底。
+    llm_provider: str = "deepseek"
 
     # Embedding（本地 Ollama）
     # ⚠️ 默认 11434 是 Ollama 标准端口；本项目实际把 Ollama 跑在 11451

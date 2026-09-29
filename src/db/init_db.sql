@@ -1,6 +1,23 @@
 -- =============================================================
 -- RAG-Demo 数据库初始化：documents 主表 + chunks 向量表
--- 执行方式：psql <DATABASE_URL> -f src/db/init_db.sql
+--
+-- ⚠️⚠️ **本文件已过期，请勿执行**（2026-09-29 标注）⚠️⚠️
+--
+-- 它只是**最初的 schema 快照**（`alembic/versions/0001_create_tables.py` 与它等价）。
+-- 此后 0002 / 0003 / 0004 三个迁移又加了 **6 个列**，本文件**都没有**：
+--   chunks.start_offset / chunks.end_offset / chunks.title
+--   chunks.is_deprecated / chunks.content_tsv
+--   documents.original_name
+--
+-- 照本文件建表 → **schema 是残的**，且**建表时不会报错**，
+-- 直到查询才失败（缺列）—— 又是一次"静默故障"。
+--
+-- ✅ **建表请用统一入口**（自动对两个库各跑一次 + 校验 schema 一致）：
+--        python scripts/migrate_all.py
+--    （原因见 `scripts/migrate_all.py` 的模块说明：迁移只跑一个库不会报错，
+--      但两库 schema 会不一致，后续查询莫名失败。）
+--
+-- 本文件保留仅为「最初长什么样」的存档。
 -- =============================================================
 
 -- pgvector 扩展

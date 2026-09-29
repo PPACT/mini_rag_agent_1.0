@@ -1,0 +1,58 @@
+# ===== 密钥与环境（绝不提交到公共网络）=====
+.env
+.env.*
+!.env.example
+
+# ===== 本地环境约定 / AI 助手配置（隐私，不上传）=====
+CLAUDE.md
+.claude/
+
+# ===== 本地留存的开发文档（不上传，见 docs/README.md）=====
+# ✅ 用**目录规则**（fail-closed）：放进 docs/local/ 的任何文件都自动忽略。
+#    相比按「精确路径」逐条排除，这样**移动/新增文件都不会失配**——
+#    不会再出现「一移动就变成未忽略 → 被 git add 推上公共仓库」的静默泄漏。
+# 约定：公开文档放 docs/ 根目录 ｜ 本地留存文档放 docs/local/
+docs/local/
+
+# ===== 本地启动脚本（含机器绝对路径，不上传）=====
+# 这类脚本硬编码了本机路径（Miniforge3 / Docker / Ollama），
+# 上传公共仓库既泄露机器信息，对别人也无用。
+scripts/start_demo.py
+scripts/stop_demo.py
+启动演示.bat
+
+# ===== IDE 本地配置 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== 数据 / 上传文件 =====
+data/
+uploads/
+# 合成评测语料（由 eval/gen_synth.py 生成，可重建）
+eval/corpus_synth/
+*.pdf
+*.docx
+*.pptx
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# ===== 日志 / 系统杂项 =====
+*.log
+logs/
+.DS_Store
+Thumbs.db

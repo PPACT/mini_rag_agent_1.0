@@ -1,0 +1,326 @@
+"""WebUI 演示：透视 RAG 链路（零新依赖，纯 FastAPI + 单页 HTML）。
+
+用途：打破"黑盒感"——让你亲眼看每一次问答的：
+  - 可见范围、各环节开关
+  - 粗排候选池 vs 精排结果（**精排到底提权了什么、误杀了什么**）
+  - 各环节耗时
+  - 最终答案及其**真实引用**来源
+
+访问：起服务后打开 http://127.0.0.1:8000/demo
+"""
+from __future__ import annotations
+
+import time
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import HTMLResponse
+from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
+
+from src.agent.graph_builder import get_agent
+from src.auth.deps import DEMO_USERS
+from src.config.prompts import load_templates
+from src.config.settings import get_settings
+from src.db.kb import KB_REAL, KB_STRESS, validate
+from src.rag.ambiguity import check_ambiguity
+from src.rag.reranker import VALID_BACKENDS, resolve_backend
+from src.rag.retriever import retrieve
+from src.vector_store.base import Chunk
+
+router = APIRouter(tags=["demo"])
+
+
+def _brief(c: Chunk, rank: int) -> dict:
+    return {
+        "rank": rank,
+        "source": c.source_file,
+        "chunk_index": c.chunk_index,
+        "score": round(c.score, 4),
+        "snippet": c.content[:120].replace("\n", " "),
+    }
+
+
+class AskRequest(BaseModel):
+    question: str
+    token: str = "demo-it-token"
+    # 目标知识库（真实 / 压测）。演示页可切换；**默认真实库**，
+    # 与 /chat 保持一致（演示页也能看真实库）。压测库需显式选择。
+    kb: str = KB_REAL
+    use_hybrid: bool = True
+    use_rerank: bool = True
+    # 精排后端**逐请求覆盖**（D11）：None = 用配置 RERANK_BACKEND；显式传 local / llm 可即时切换。
+    # ⚠️ 之所以能"即时切换"，是因为 `get_reranker` 已从「一个全局单例」改为
+    #    「按 backend 分别持单例」——否则这里传了也不生效（UI 变了、行为不变）。
+    rerank_backend: str | None = None
+    with_answer: bool = True
+
+
+@router.post("/demo/ask")
+async def demo_ask(req: AskRequest) -> dict:
+    """跑一次完整链路，返回答案 + 中间结果 + 耗时（供 WebUI 透视）。"""
+    settings = get_settings()
+    user = DEMO_USERS.get(req.token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="无效 token")
+    departments = list({user.department, settings.company_scope})
+    try:
+        kb = validate(req.kb)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    try:
+        # 非法后端名 → 400（不静默回退到某个后端：`local`/`llm` 质量与延迟差一个量级）
+        eff_backend = resolve_backend(req.rerank_backend)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    trace: dict = {}
+    t0 = time.perf_counter()
+    _, chunks = await retrieve(
+        req.question, departments, user.secret_level, kb=kb,
+        use_hybrid=req.use_hybrid, use_rerank=req.use_rerank,
+        rerank_backend=eff_backend, trace=trace,
+    )
+    retrieve_ms = int((time.perf_counter() - t0) * 1000)
+
+    candidates = trace.get("candidates", [])
+    final = trace.get("final", [])
+    answer, cited, generate_ms = None, [], 0
+
+    if req.with_answer and settings.llm_api_key and final:
+        _, human_tpl = load_templates()
+        ctx = "\n\n".join(
+            f"[来源{i}] (文件:{c.source_file}, 块:{c.chunk_index})\n{c.content}"
+            for i, c in enumerate(final, 1)
+        )
+        t1 = time.perf_counter()
+        try:
+            agent = get_agent()
+            result = await agent.ainvoke({"messages": [HumanMessage(content=human_tpl.format(context=ctx, question=req.question))]})
+            answer = str(result["messages"][-1].content)
+            if not answer.strip():
+                # 与 /chat 一致（P0-4）：空答案**显式化**，不把空白当正常答案返回
+                answer = "[生成环节未返回内容]"
+        except Exception as e:  # noqa: BLE001
+            answer = f"[生成失败] {e}"
+        generate_ms = int((time.perf_counter() - t1) * 1000)
+        # 引用校验（与线上一致）
+        from src.api.chat_api import _cited_chunks
+        cited = [_brief(c, i) for i, c in enumerate(_cited_chunks(final, answer), 1)]
+
+    # 歧义判定也是 LLM 调用（1-3 秒），必须计时——否则页面显示的"合计"会远低于真实等待
+    t2 = time.perf_counter()
+    amb = await check_ambiguity(req.question, final) if final else None
+    ambiguity_ms = int((time.perf_counter() - t2) * 1000)
+    total_ms = retrieve_ms + generate_ms + ambiguity_ms
+
+    return {
+        "question": req.question,
+        "kb": kb,                       # 本次查询的实际知识库（页面显示，防"看错库"）
+        "user": {"name": user.name, "department": user.department, "scope": departments},
+        "mode": trace.get("mode", {}),
+        # **实际生效**的精排后端（供页面显示：LLM 还是本地 cross-encoder）
+        # ⚠️ 回显的是**本次实际用的后端**（`eff_backend`），不是 `settings.rerank_backend` ——
+        #    D11 的验收点就在这里：切了后端，"精排后端"这一栏必须跟着变；
+        #    **只变 UI 不算通过**（那正是"配置值不生效"陷阱的表现）。
+        #    `enabled` 单独给出：精排开关关掉时，页面不该还宣称用了某个后端。
+        "rerank": {
+            "backend": eff_backend,
+            "enabled": bool(trace.get("mode", {}).get("rerank")),
+            "model": (settings.rerank_local_model if eff_backend == "local"
+                      else settings.llm_model),
+        },
+        "timings": {
+            "retrieve_ms": retrieve_ms,      # 检索链路（含精排）
+            "generate_ms": generate_ms,      # LLM 生成答案
+            "ambiguity_ms": ambiguity_ms,    # 歧义判定（LLM）
+            "total_ms": total_ms,            # 三者之和（应接近真实往返）
+        },
+        "answer": answer,
+        "cited": cited,
+        "ambiguous": bool(amb and amb.ambiguous),
+        # 判定**三态**（P0-1）：clear / ambiguous / unknown
+        # ⚠️ `unknown` 与 `ambiguous` 不同：前者是"判定器没给出有效结论"，页面要分开显示 ——
+        #    否则"没判定"和"判定了：不歧义"在这个透视页上长得一模一样（正是要消灭的静默）。
+        "judge_status": (amb.status if amb else "clear"),
+        "ambiguity_reason": (amb.reason if amb else ""),
+        "candidates": [_brief(c, i) for i, c in enumerate(candidates, 1)],
+        "final": [_brief(c, i) for i, c in enumerate(final, 1)],
+    }
+
+
+@router.get("/demo", response_class=HTMLResponse)
+async def demo_page() -> str:
+    return DEMO_HTML
+
+
+DEMO_HTML = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG 链路透视</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --fg:#e6e8ec; --dim:#8b93a3;
+          --ok:#3fb950; --warn:#d29922; --bad:#f85149; --acc:#58a6ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:16px; margin-bottom:16px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=text] { flex:1; min-width:260px; background:#0d1017; border:1px solid var(--line);
+                     color:var(--fg); padding:10px 12px; border-radius:8px; font-size:14px; }
+  select, button { background:#0d1017; border:1px solid var(--line); color:var(--fg);
+                   padding:10px 12px; border-radius:8px; font-size:14px; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#04121f; font-weight:600; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  label.chk { display:flex; gap:6px; align-items:center; color:var(--dim); user-select:none; }
+  .meta { color:var(--dim); font-size:12px; margin-top:10px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
+  .item { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:8px;
+          background:#0d1017; font-size:12.5px; }
+  .item .h { display:flex; justify-content:space-between; gap:8px; color:var(--dim); }
+  .item .s { margin-top:4px; color:#b9c0cc; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:999px; font-size:11px;
+          border:1px solid var(--line); color:var(--dim); }
+  .up { color:var(--ok); border-color:var(--ok); }
+  .down { color:var(--bad); border-color:var(--bad); }
+  .ans { white-space:pre-wrap; background:#0d1017; border:1px solid var(--line);
+         border-radius:8px; padding:12px; }
+  .tag { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>RAG 链路透视</h1>
+  <div class="sub">问一个问题，看它是<b>怎么被检索到的</b>——粗排候选池 vs 精排结果、耗时、真实引用来源。</div>
+
+  <div class="card">
+    <div class="row">
+      <input id="q" type="text" placeholder="例：远程办公得提前几天在OA上申请？" value="远程办公得提前几天在OA上申请？">
+      <select id="kb" title="知识库：真实业务库 / 压测库（合成语料）">
+        <option value="real">📗 真实库 rag_real</option>
+        <option value="stress">🧪 压测库 rag_stress</option>
+      </select>
+      <select id="token">
+        <option value="demo-it-token">IT 用户（张三）</option>
+        <option value="demo-hr-token">HR 用户（李四）</option>
+        <option value="demo-public-token">公开用户（访客）</option>
+      </select>
+      <button id="go" class="primary">提问</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label class="chk"><input type="checkbox" id="hybrid" checked> 混合检索（向量+词法）</label>
+      <label class="chk"><input type="checkbox" id="rerank" checked> 启用精排</label>
+      <label class="chk">精排后端
+        <select id="backend" title="逐请求切换精排后端（默认跟随配置）。切完直接提问，看下方“精排后端”一栏是否真的变了">
+          <option value="">默认（跟随配置）</option>
+          <option value="local">本地 cross-encoder</option>
+          <option value="llm">LLM 精排</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="answer" checked> 生成答案（关掉更快，只看检索）</label>
+    </div>
+    <div class="meta" id="meta">就绪</div>
+  </div>
+
+  <div id="out"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function itemHTML(x, marks) {
+  const tag = marks && marks.get(x.rank) ? `<span class="pill ${marks.get(x.rank)}">${marks.get(x.rank)==='up'?'精排提权':'精排下移'}</span>` : '';
+  return `<div class="item">
+    <div class="h"><span>#${x.rank} ${esc(x.source)} · 块${x.chunk_index}</span>
+    <span>score ${x.score} ${tag}</span></div>
+    <div class="s">${esc(x.snippet)}…</div></div>`;
+}
+
+$('#go').onclick = async () => {
+  const btn = $('#go'); btn.disabled = true;
+  $('#meta').textContent = '运行中…（开精排+生成约 5-10 秒）';
+  $('#out').innerHTML = '';
+  const tStart = performance.now();
+  try {
+    const r = await fetch('/demo/ask', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        question: $('#q').value, token: $('#token').value, kb: $('#kb').value,
+        use_hybrid: $('#hybrid').checked, use_rerank: $('#rerank').checked,
+        rerank_backend: $('#backend').value || null,
+        with_answer: $('#answer').checked
+      })
+    });
+    const roundtrip = Math.round(performance.now() - tStart);   // 真实往返（用户实际等待）
+    const d = await r.json();
+    if (!r.ok) { $('#meta').innerHTML = `<span class="err">失败：${esc(d.detail)}</span>`; return; }
+
+    const t = d.timings;
+    const rk = d.rerank || {};
+    const rkName = rk.backend === 'local'
+        ? `本地 cross-encoder <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`
+        : `LLM <span style="color:#8b93a3">(${esc(rk.model||'')})</span>`;
+    // 关掉精排时不该还宣称"用了某个后端"—— 显示的必须是**实际发生的**
+    const rkLabel = rk.enabled === false
+        ? `<span style="color:#8b93a3">未启用（走粗排顺序）</span>` : rkName;
+    const gap = roundtrip - t.total_ms;
+    const kbLabel = d.kb === 'stress' ? '🧪 压测库 rag_stress' : '📗 真实库 rag_real';
+    $('#meta').innerHTML = `知识库 <b>${kbLabel}</b>`
+      + ` ｜ 可见范围 <b>${esc(d.user.scope.join(' + '))}</b>`
+      + ` ｜ 精排后端：<b>${rkLabel}</b><br>`
+      + `耗时分解：检索 <b>${t.retrieve_ms}ms</b>`
+      + ` / 生成 <b>${t.generate_ms}ms</b>`
+      + ` / 歧义判定 <b>${t.ambiguity_ms}ms</b>（LLM）`
+      + ` → 后端合计 <b>${t.total_ms}ms</b>`
+      + ` ｜ 真实往返 <b>${roundtrip}ms</b>`
+      + (gap > 300 ? ` <span style="color:#d29922">(差 ${gap}ms = 网络/HTTP 开销)</span>` : '');
+
+    // 精排前后变化标记
+    const before = new Map(d.candidates.map(x=>[x.source+'#'+x.chunk_index, x.rank]));
+    const after  = new Map(d.final.map(x=>[x.source+'#'+x.chunk_index, x.rank]));
+    const marksB = new Map(), marksA = new Map();
+    d.final.forEach(x => {
+      const k = x.source+'#'+x.chunk_index;
+      if (before.has(k) && before.get(k) > x.rank) { marksA.set(x.rank,'up'); }
+    });
+    d.candidates.forEach(x => {
+      const k = x.source+'#'+x.chunk_index;
+      if (after.has(k) && after.get(k) > x.rank) { marksB.set(x.rank,'down'); }
+    });
+
+    let html = '';
+    if (d.answer !== null && d.answer !== undefined) {
+      const amb = d.ambiguous ? `<div class="pill down" style="margin-bottom:8px;display:inline-block">⚠ 判定为歧义：${esc(d.ambiguity_reason)}</div>` : '';
+      // 三态里的第三态：判定器**没给出有效结论**（≠ 判定了"不歧义"）
+      const unver = d.judge_status === 'unknown'
+        ? `<div class="pill down" style="margin-bottom:8px;display:inline-block">⚠ 一致性检查未得出有效结论 —— 本答案未确认：${esc(d.ambiguity_reason)}</div>` : '';
+      html += `<div class="card"><div class="tag">答案</div>${amb}${unver}<div class="ans">${esc(d.answer)}</div>
+        <div class="meta">引用校验后保留 ${d.cited.length} 条来源：${d.cited.map(c=>esc(c.source)+' · 块'+c.chunk_index).join('，')||'（无）'}</div></div>`;
+    }
+
+    const n = Math.min(8, Math.max(d.candidates.length, d.final.length));
+    html += `<div class="card"><div class="tag">检索链路：粗排候选池(${d.candidates.length}条) → 精排(${d.final.length}条)</div>
+      <div class="grid">
+        <div><div class="meta" style="margin:0 0 8px">粗排前${n}（RRF 融合后）</div>${d.candidates.slice(0,n).map(x=>itemHTML(x,marksB)).join('')}</div>
+        <div><div class="meta" style="margin:0 0 8px">精排后（送给 LLM）</div>${d.final.slice(0,n).map(x=>itemHTML(x,marksA)).join('')}</div>
+      </div>
+      <div class="meta">绿色=精排把它提上来了；红色=精排把它压下去了。若正确块在左边却不在右边 → <b>精排误杀</b>。</div>
+    </div>`;
+
+    $('#out').innerHTML = html;
+  } catch(e) {
+    $('#meta').innerHTML = `<span class="err">异常：${esc(String(e))}</span>`;
+  } finally { btn.disabled = false; }
+};
+</script>
+</body>
+</html>
+"""

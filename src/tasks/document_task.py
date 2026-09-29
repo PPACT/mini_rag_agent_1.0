@@ -1,0 +1,81 @@
+"""文档解析 -> 切块 -> 向量化 -> 入库 的异步任务。"""
+from __future__ import annotations
+
+import os
+
+from src.cache.redis_client import invalidate_cache
+from src.config.settings import get_settings
+from src.db.connection import get_pool
+from src.document_parser.loader import load_text
+from src.document_parser.semantic_splitter import split_text
+from src.embedding.base import get_embedding
+from src.vector_store.base import Chunk, get_vector_store
+
+
+async def process_document(
+    ctx: dict, kb: str, document_id: str, department: str | None = None, secret_level: int = 0
+) -> None:
+    """后台任务：解析 -> 结构化切块 -> 向量化 -> 原子写库 -> 更新状态。
+
+    `kb` 由入队时确定（真实 / 压测），决定**读文档状态与写切片**都落在哪个库。
+    """
+    settings = get_settings()
+    pool = await get_pool(kb)
+
+    row = await pool.fetchrow(
+        "SELECT id, filename, original_name, version FROM documents WHERE id = $1::uuid",
+        document_id,
+    )
+    if row is None:
+        return
+
+    await pool.execute(
+        "UPDATE documents SET status='processing', updated_at=now() WHERE id=$1::uuid", document_id
+    )
+    try:
+        file_path = os.path.join(settings.upload_dir_abs, row["filename"])
+        text = load_text(file_path)
+
+        text_chunks = split_text(text, settings.chunk_size, settings.chunk_overlap)
+        if not text_chunks:
+            raise ValueError("解析后无有效文本")
+
+        embedding = get_embedding()
+        vectors = await embedding.embed([tc.text for tc in text_chunks])
+
+        version = row["version"]
+        chunk_objs = [
+            Chunk(
+                document_id=document_id,
+                chunk_index=i,
+                content=tc.text,
+                # D9-③：`source_file` 是**对外溯源**的字段（还会进 LLM 上下文），
+                # 必须用原始文件名而非 UUID 落盘名。存量行 original_name 为 NULL
+                # （0004 迁移不回填假数据），此时回落 filename。
+                source_file=row["original_name"] or row["filename"],
+                document_version=version,
+                department=department,
+                secret_level=secret_level,
+                start_offset=tc.start,
+                end_offset=tc.end,
+                title=tc.title,
+            )
+            for i, tc in enumerate(text_chunks)
+        ]
+
+        store = get_vector_store(kb)
+        await store.replace_document(document_id, chunk_objs, vectors)
+
+        await pool.execute(
+            "UPDATE documents SET status='completed', chunk_count=$2, updated_at=now() WHERE id=$1::uuid",
+            document_id,
+            len(text_chunks),
+        )
+        await invalidate_cache(kb)   # D9-⑦：只清**本库**的问答缓存，不波及另一个库
+    except Exception as e:  # noqa: BLE001
+        await pool.execute(
+            "UPDATE documents SET status='failed', error=$2, updated_at=now() WHERE id=$1::uuid",
+            document_id,
+            str(e),
+        )
+        raise  # 交给 arq 重试；超 max_tries 后 job 判失败，状态已标 failed（死信兜底）

@@ -1,0 +1,8 @@
+{"id": 4000, "kind": "exact", "question": "提交代码时，要求的编号格式是什么样的？", "source": "llm043_代码提交规范.md", "answer_span": "格式为 `#JIRA-1234`", "type": "exact_term"}
+{"id": 4001, "kind": "exact", "question": "无线接入必须用什么认证标准？", "source": "llm032_网络准入.md", "answer_span": "WPA3-Enterprise或802.1X认证", "type": "exact_term"}
+{"id": 4002, "kind": "exact", "question": "灾备演练中 RTO 和 RPO 分别不能超过多久？", "source": "llm035_灾备演练.md", "answer_span": "RTO不超过2小时，RPO不超过15分钟", "type": "exact_term"}
+{"id": 4003, "kind": "exact", "question": "漏洞因技术原因无法按期修复，需要谁批准？", "source": "llm037_漏洞管理.md", "answer_span": "须经 CISO 书面批准", "type": "exact_term"}
+{"id": 4004, "kind": "exact", "question": "服务台工单可以通过哪些系统提交？", "source": "llm089_服务台工单.md", "answer_span": "ITSM 系统提交的服务台工单", "type": "exact_term"}
+{"id": 4005, "kind": "exact", "question": "合并请求 MR 需要几个人审批才能合入？", "source": "llm043_代码提交规范.md", "answer_span": "须至少 1 名同组工程师审批通过方可合入", "type": "exact_term"}
+{"id": 4006, "kind": "exact", "question": "代码评审要重点检查哪些安全漏洞？", "source": "llm094_代码评审.md", "answer_span": "SQL 注入、越权", "type": "exact_term"}
+{"id": 4007, "kind": "exact", "question": "POC 测试由哪个部门负责？", "source": "llm086_售前支持.md", "answer_span": "售前技术部负责方案、演示、POC 测试", "type": "exact_term"}

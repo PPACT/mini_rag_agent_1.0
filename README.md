@@ -81,8 +81,13 @@
 - **答不上来会说不知道**：判定分**三态**（有答案 / 无答案 / **无法判断**），而不是"猜一个"；
 - **不隐瞒取舍**：每处技术选择都记了**理由和已被证伪的方向**，见 [`docs/开发记录.md`](docs/开发记录.md)。
 
-**2.0 正在做**：多格式**路由式解析**（按文档类型选解析器与切块策略）· **表格内容入库** ·
-让"文档间的冲突"成为**可查的数据**，而不是每次靠模型现猜。
+**2.0 已落地**：**三层路由式解析**（文件级 → 解析器级 → 切块级，**每层都有 fallback**）·
+**表格内容入库**（自然语言版进向量 / 原表随行只进词法）· **页码元数据**（引用可答"第几页"）·
+**解析失败显式报错 + 失败清单**（不再静默丢文件）。
+
+**本轮没做的**（写出来避免误解）：表格的**跨页合并**与**超大表按行切**、代码按函数切、
+**图片与 OCR**（⚠️ 解析器**不提取图片** —— **图片目前是静默丢失的**）、清洗规则（管道此步为直通）。
+完整缺口清单见 [`docs/架构方案.md`](docs/架构方案.md) §9 与 [`docs/开发记录.md`](docs/开发记录.md) §6。
 
 <p align="right">(<a href="#readme-top">回到顶部</a>)</p>
 
@@ -136,10 +141,13 @@ PYTHONIOENCODING=utf-8 python -m arq src.tasks.worker.WorkerSettings
 
 ```
 入口      /chat（业务问答） · /documents（上传/状态） · /demo（链路透视）
+解析      三层路由：文件级（后缀+magic 互证）→ 解析器级（链式 fallback）→ 切块级
+          → 统一 IR：Block{kind ∈ paragraph/heading/table/code, page, raw_table, …}
+          → table / code「整块不切」，段落·标题「按段切」（⚠️ 页边界也断段）
 检索      retriever（混合检索 + RRF 融合）→ reranker（两段式精排）→ ambiguity（歧义判定/澄清）
 抽象      VectorStore / BaseEmbedding / BaseReranker —— 各引擎各自实现，业务代码不感知
 数据      PostgreSQL 17 + pgvector（向量 + 全文检索同库）；Redis（缓存 + 任务队列）
-异步      Arq worker：解析 → 结构优先切块 → 本地 embedding → 原子替换切片
+异步      Arq worker：三层路由 → 解析 → 块级切块 → 本地 embedding → 原子替换切片
 ```
 
 两条链路的顺序**不同**，且**只有 `/chat` 读写缓存**：
@@ -163,13 +171,15 @@ src/
 ├── rag/              retriever · reranker · ambiguity · query_rewriter
 ├── vector_store/     base(抽象+权限过滤) · pg_vector(实现) · milvus(占位)
 ├── embedding/        base(抽象) · ollama_embedding · cloud_embedding(占位)
-├── document_parser/  loader(多格式) · semantic_splitter(结构优先切块) · tokenizer(jieba)
+├── document_parser/  routing(三层路由) · parsers · tables(表格) · blocks(统一 IR)
+│                     · chunking(块级切块) · semantic_splitter · tokenizer(jieba)
 ├── agent/            graph_builder(LangGraph) · mcp_client_wrapper · mcp_mock_server
 ├── db/               kb(两库标识) · connection(按 kb 的连接池)
 ├── tasks/            queue · worker · document_task
 ├── config/           settings · litellm_client · prompts
 └── auth/ cache/ schemas/ observability/
 alembic/versions/     0001 建表 · 0002 切片元数据 · 0003 全文检索 · 0004 原始文件名
+                      · 0005 page / raw_table / table_complex（2.0）
 eval/                 语料 + 标注数据集 + 评测脚本
 prompts/rag_system.yaml   提示词（外置，便于迭代）
 docs/                 开发文档
@@ -364,10 +374,18 @@ RERANK_BACKEND=llm PYTHONIOENCODING=utf-8 python -m uvicorn src.main:app
 
 **检索与数据**
 
-- **清洗基本没做**（页眉页脚 / 控制符 / 重复内容）；
+- **清洗基本没做** —— 管道里这一步是**直通**（页眉页脚 / 控制符 / 重复内容都没处理）；
 - **「该拒答时能否拒答」尚无评测集**；
 - ⚠️ **表格数值的"真实命中率"尚未验证** —— 表格解析入库的**管道已通**
   （自然语言版进向量 / 原表随行），但**只在夹具上验过**；真实文档上的命中率**没有数字**。
+
+**解析与切块**（2.0 本轮没覆盖的）
+
+- ⚠️ **图片不提取、静默丢失** —— 解析器里**没有图片这一层**，元数据也没有 `image_path`；
+  **OCR 未实现**（扫描件只标记"待 OCR"）；
+- ⚠️ **跨页表格会裂成两块**（第二块没有表头）；**超大表格不按行切**（无行数上限）；
+  **代码整块不切**（未上 tree-sitter，大文件会产出超长块）；
+- ⚠️ **表格识别方式未复核** —— 实测**无框线**的 PDF，`pdfplumber.extract_tables()` **返回 0 张表**。
 
 **对话与 Agent**
 

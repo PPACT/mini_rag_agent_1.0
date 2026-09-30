@@ -29,6 +29,7 @@ from src.document_parser.parsers import (
     parse_pptx,
     parse_xlsx,
 )
+from src.document_parser.table_recovery import recover_tables
 
 
 # ---------------------------------------------------------------- 异常（2.0-3）
@@ -260,6 +261,11 @@ def parse_document(path: str) -> ParsedDoc:
         if not doc.blocks:
             attempts.append((name, "解析成功但没有任何内容（空文档 / 内容全被过滤）"))
             continue
+        # 2.0-1 补缺口：把"被降级成普通段落"的 Markdown 表格**重建**成 table 块
+        # （md→docx 的转换工具会把表格转成 `| a | b |` 这种普通文本；
+        #  不重建则那些文件的表格块数为 0 → 表格数值命中率的**分母是假的**）
+        # ⚠️ 放在这里而不是调用方：让**所有**解析入口自动受益，不能靠"记得调"
+        doc, _recovery = recover_tables(doc)
         if plan.note:
             doc.warnings.insert(0, plan.note)
         return doc

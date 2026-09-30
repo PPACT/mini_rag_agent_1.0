@@ -43,6 +43,50 @@ def test_fidelity_holds_for_awkward_numbers():
     assert missing_numbers(rows_to_markdown(rows), nl) == []
 
 
+def test_raw_table_adds_no_unique_tokens():
+    """⭐ **可观测的健康指标**（文档侧 §1.25② 的建议，比"改注释"更进一步）。
+
+    `raw_table` 给词法索引带来的**独有 token 必须为空**：
+
+    - **为空** → 说明**自然语言版是保真的**（转换做对了）；
+    - **不为空** → **自然语言版有损**（丢了列 / 丢了值）→ **去查 `render_nl`**，别去查索引。
+
+    为什么要有这条：口径原本给「原表进词法」的理由是"多一条精确召回路径"，
+    而**实测那个理由是空的**（因为保真成立）。与其删掉理由，不如**把它变成断言** ——
+    这样它从"一句解释"升级成"**下一轮改动会被它拦住**"。
+    （同 D9④⑤⑥ 的教训：注释解释了不存在的事，要修；而**能失败的东西才算守卫**。）
+    """
+    from src.document_parser.tokenizer import tokenize
+
+    shapes = [
+        REIMBURSE,                                               # 普通表
+        [["部门", "", "金额"], ["IT", "差旅", "600"]],            # 表头有合并（空单元格）
+        [["季度", "金额"], ["Q3", "1,234.50"], ["Q4", "-300"]],  # 千分位 / 负数
+        [["项目"], ["缺列的表"]],                                  # 单列
+    ]
+    for rows in shapes:
+        nl = render_nl(rows, caption="t")
+        extra = sorted(set(tokenize(nl + "\n" + rows_to_markdown(rows)).split())
+                       - set(tokenize(nl).split()))
+        assert not extra, (
+            f"自然语言版可能**不保真**：raw_table 带来独有 token {extra}。"
+            f"→ 去查 render_nl（不是索引的问题）"
+        )
+
+
+def test_health_indicator_can_actually_fail():
+    """反向验证：上面那条指标**必须能失败** —— 否则它只是永远绿的摆设。
+
+    用一份"有损的自然语言版"（故意漏掉一列）来触发它。
+    """
+    from src.document_parser.tokenizer import tokenize
+
+    rows = [["季度", "金额"], ["Q3", "5000"]]
+    lossy_nl = "表：季度=Q3"                       # 故意丢了"金额=5000"
+    extra = set(tokenize(lossy_nl + "\n" + rows_to_markdown(rows)).split()) - set(tokenize(lossy_nl).split())
+    assert extra, "有损的自然语言版必须让指标非空（否则这道闸是假的）"
+
+
 def test_fidelity_gate_can_actually_fail():
     """⚠️ **反向验证**：这道闸必须能失败 —— 否则它只是永远绿的摆设。
 

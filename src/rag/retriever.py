@@ -11,16 +11,22 @@ from src.vector_store.base import AccessFilter, Chunk, get_vector_store
 def format_context(chunks: list[Chunk]) -> str:
     """把命中切片拼成带 [来源N] 标记的上下文。
 
-    ⚠️ **刻意只放 `content`，不放 `raw_table`**（2.0-1 口径，别"顺手"改）：
-    表格的 `content` 是**自然语言版**，而它受一条验收管着 ——
-    「原表里的每个数值都必须在自然语言版里被找到」（`tables.missing_numbers`，
-    有测试守着）。保真既然已由那道闸保证，这里再塞一遍原表只会**占 token**、
-    并且与 `content` 内容重复。
-    原表的作用是**给人核对**（随 `Source` 返回前端），不是给模型抄。
+    ⚠️ **`raw_table` 只对「复杂表」放行**（2.0-1 口径，别"顺手"改成全放或全不放）：
+
+    | 情况 | 放不放 | 为什么 |
+    |---|---|---|
+    | **一般表** | ❌ 不放 | `content` 是自然语言版，受一条验收管着 ——「原表每个数值都必须能在自然语言版里找到」（`tables.missing_numbers` + 测试）。保真既已由那道闸保证，再塞一遍只是**占 token** 且与 `content` 重复 |
+    | **`table_complex=True`** | ✅ **放** | 这类表（多级合并表头等）**恰恰是"可能不保真"的** —— 原表在这里是**必要兜底**，不是冗余 |
+
+    判据是**按标记决定**（不是拍脑袋），与"**不确定时宁可判复杂**"同一取向。
+    ⚠️ 原表还随 `Source` 返回前端（**给人核对**）—— 那是**另一条去向**，别混成一条。
     """
     parts = []
     for i, c in enumerate(chunks, 1):
-        parts.append(f"[来源{i}] (文件:{c.source_file}, 块:{c.chunk_index})\n{c.content}")
+        body = c.content
+        if c.table_complex and c.raw_table:
+            body += f"\n\n【原表】\n{c.raw_table}"
+        parts.append(f"[来源{i}] (文件:{c.source_file}, 块:{c.chunk_index})\n{body}")
     return "\n\n".join(parts)
 
 

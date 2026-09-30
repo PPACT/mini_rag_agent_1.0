@@ -232,6 +232,11 @@ class PgVectorStore(VectorStore):
                         #   ① **词频提升**：ts_rank 计次 → 表格块在数值类查询下排名略微靠前；
                         #   ② **保险**：万一将来自然语言版变得有损（丢列/丢行），
                         #      原表还在词法索引里，不至于连值都搜不到。
+                        # ⭐ **"本字段的独有 token 应为空"是一个可观测的健康指标**（文档侧建议）：
+                        #    **不为空 → 自然语言版有损（丢了列/值）→ 去查 `render_nl`，别查索引。**
+                        #    守卫：`tests/test_tables.py::test_raw_table_adds_no_unique_tokens`
+                        #    （带反向用例 —— 用一份有损的渲染验证它真能失败）。
+                        #
                         # 中文需 Python 侧分词后再交给 tsvector。
                         tokenize(chunk.content + ("\n" + chunk.raw_table if chunk.raw_table else "")),
                     )

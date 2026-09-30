@@ -23,14 +23,19 @@ _XLSX_ROWS_PER_BLOCK = 60
 
 
 def _table_block(rows: list[list[str]], caption: str | None, page: int | None = None,
-                 **meta) -> Block:
-    """把二维表变成一个 table block（自然语言版 + 原表 + 复杂度）。"""
+                 complex_hint: bool = False, **meta) -> Block:
+    """把二维表变成一个 table block（自然语言版 + 原表 + 复杂度）。
+
+    `complex_hint`：**调用方从格式里查到的结构性事实**（如 Word 的 `gridSpan`）。
+    ⚠️ 它和 `is_complex(rows)` 是**互补**的，不是重复 —— 见 `_docx_table_has_merges` 的说明。
+    """
     return Block(
         kind="table",
         text=render_nl(rows, caption=caption),
         page=page,
         raw_table=rows_to_markdown(rows),
-        table_complex=is_complex(rows),
+        # 「不确定时宁可判复杂」：任一判据为真即复杂（失败模式不对称，见交流区 §1.27）
+        table_complex=complex_hint or is_complex(rows),
         meta=meta,
     )
 
@@ -85,6 +90,36 @@ def _docx_table_rows(table) -> list[list[str]]:
     return [[cell.text.strip() for cell in row.cells] for row in table.rows]
 
 
+# WordprocessingML 命名空间（查合并要用）
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def _docx_table_has_merges(table) -> bool:
+    """查 `gridSpan`（横向合并）与 `vMerge`（纵向合并）—— **结构性事实**，不是启发式。
+
+    ⚠️ **为什么不看文本**（2026-09-30 实测，交流区 §1.27 核对点 2）：
+
+    一个首行"差旅标准"横跨 2 列的表，python-docx 读出来是
+    `['差旅标准', '差旅标准', '备注']` —— 它把合并单元格的文本**重复**到每个被并的格里。
+    于是 `is_complex()` 的两条判据（**行长不齐** / **首行有空单元格**）**都看不出 Word 的合并**，
+    实测返回 `False`（漏判）。
+
+    而底层 XML 里 `gridSpan=2` / `vMerge` 是**明确记着**的 —— 这才是口径说的
+    「查 rowspan/colspan」。
+
+    ⚠️ 漏判的代价不对称（口径原话）：**复杂误判成简单 → 静默污染知识库**；
+    反过来只花钱。→ 所以这里**查到任何合并就判复杂**，不做进一步甄别。
+    """
+    for row in table.rows:
+        for cell in row.cells:
+            tcpr = cell._tc.tcPr          # noqa: SLF001 —— python-docx 没给公开 API，只能读 XML
+            if tcpr is None:
+                continue
+            if tcpr.find(f"{_W}gridSpan") is not None or tcpr.find(f"{_W}vMerge") is not None:
+                return True
+    return False
+
+
 def _is_heading(paragraph) -> bool:
     """判断段落是不是标题。
 
@@ -109,7 +144,8 @@ def parse_docx(path: str) -> ParsedDoc:
         if item.__class__.__name__ == "Table":
             rows = _docx_table_rows(item)
             if rows and any(any(c for c in r) for r in rows):
-                blocks.append(_table_block(rows, caption=None, table_index=tables))
+                blocks.append(_table_block(rows, caption=None, table_index=tables,
+                                           complex_hint=_docx_table_has_merges(item)))
                 tables += 1
         else:
             text = (item.text or "").strip()

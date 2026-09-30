@@ -15,7 +15,7 @@ from src.document_parser.routing import (
     route_file,
     supported_extensions,
 )
-from src.document_parser.tables import missing_numbers
+from src.document_parser.tables import missing_numbers, render_nl
 
 
 # ---------------------------------------------------------------- 夹具
@@ -216,6 +216,101 @@ def test_page_numbers_only_where_meaningful(tmp_path):
     """⚠️ Word/Excel **没有稳定页码** → 必须是 None，不能编一个 0/1。"""
     p = _make_docx(tmp_path / "p.docx", paragraphs=["一段"])
     assert all(b.page is None for b in load_document(str(p)).blocks)
+
+
+# ---------------------------------------------------------------- 复杂表判定（口径核对点 2）
+
+
+def test_word_merged_table_is_flagged_complex(tmp_path):
+    """⚠️ **口径核对点 2 的回归**：Word 的合并单元格必须被判为复杂表。
+
+    为什么容易漏：python-docx 把合并单元格的文本**重复**到每个被并的格里
+    （`差旅标准 | 差旅标准 | 备注`）→ 「行长不齐 / 首行有空」两条判据**都看不出**。
+    证据在底层 XML 的 `gridSpan` / `vMerge` 里（口径原话：「查 rowspan/colspan」）。
+
+    漏判的代价不对称：**复杂误判成简单 → 静默污染知识库**（源表该进向量却没进）。
+    """
+    import docx
+
+    d = docx.Document()
+    t = d.add_table(rows=2, cols=3)
+    t.cell(0, 0).text = "差旅标准"
+    t.cell(0, 2).text = "备注"
+    t.cell(0, 0).merge(t.cell(0, 1))          # 横向合并
+    t.cell(1, 0).text = "一线"
+    t.cell(1, 1).text = "600"
+    t.cell(1, 2).text = "-"
+    p = tmp_path / "merged.docx"
+    d.save(str(p))
+
+    tables = load_document(str(p)).tables()
+    assert len(tables) == 1
+    assert tables[0].table_complex is True, "Word 的合并单元格必须判为复杂表"
+
+
+def test_word_vertical_merge_is_flagged(tmp_path):
+    """纵向合并（`vMerge`）同样要判出来 —— 它是另一条 XML 证据。"""
+    import docx
+
+    d = docx.Document()
+    t = d.add_table(rows=3, cols=2)
+    t.cell(0, 0).text = "部门"
+    t.cell(1, 0).text = "IT"
+    t.cell(2, 0).text = "IT"
+    t.cell(1, 0).merge(t.cell(2, 0))          # 纵向合并
+    t.cell(0, 1).text = "人数"
+    t.cell(1, 1).text = "3"
+    t.cell(2, 1).text = "5"
+    p = tmp_path / "vmerge.docx"
+    d.save(str(p))
+
+    assert load_document(str(p)).tables()[0].table_complex is True
+
+
+def test_word_plain_table_is_not_flagged(tmp_path):
+    """反向：**普通表不该被误判成复杂**（否则所有表的原表都进向量，等于没判）。"""
+    p = _make_docx(tmp_path / "plain.docx", paragraphs=["x"], table=REIMBURSE_TABLE)
+    assert load_document(str(p)).tables()[0].table_complex is False
+
+
+# ---------------------------------------------------------------- 口径核对点 3②
+
+
+def test_header_and_value_never_cross_rows(tmp_path):
+    """口径核对点 3②：**行列头与值不串行**（`Q3` 必须和 `5000` 同句）。
+
+    这条是给"LLM 转"设的闸；**规则转天然满足** —— 但这里仍加一条测试把它钉住，
+    因为将来若有人改写渲染逻辑（比如改成"先列所有表头、再列所有值"），
+    就会**静默**产生串行，而那正是口径要防的。
+    """
+    rows = [["季度", "金额"], ["Q3", "5000"], ["Q4", "6000"]]
+    nl = render_nl(rows, caption="预算")
+    # 每个 值 都必须紧跟在**它自己那行的**列名后面
+    assert "季度=Q3；金额=5000" in nl
+    assert "季度=Q4；金额=6000" in nl
+    # 且不能出现跨行配对
+    assert "Q3；金额=6000" not in nl and "Q4；金额=5000" not in nl
+
+
+def test_parser_layer_has_no_llm_dependency():
+    """口径 v1「**不上 LLM**」：解析层（表格转换 + 各格式解析）**不得依赖 LLM 客户端**。
+
+    ⚠️ 用**静态检查**，不是"打桩后再跑一遍" —— 后者是**假保险**：
+    若 `tables.py` 写了 `from src.config.litellm_client import complete`，
+    再 `monkeypatch.setattr(lc, "complete", boom)` **根本拦不住**
+    （那个名字在导入时就已经绑进 `tables` 模块了），测试照样绿。
+    """
+    import inspect
+
+    from src.document_parser import parsers, tables
+
+    for mod in (tables, parsers):
+        src = inspect.getsource(mod)
+        for forbidden in ("litellm_client", "get_agent", "acompletion"):
+            assert forbidden not in src, (
+                f"{mod.__name__} 里出现了 {forbidden!r} —— 解析层不该依赖 LLM"
+                f"（口径 v1：规则转换、LLM 调用 0 次、成本 0）"
+            )
 
 
 # ---------------------------------------------------------------- 纯文本 / 编码

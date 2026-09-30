@@ -82,7 +82,11 @@ def is_complex(rows: list[list[str]]) -> bool:
 
     - **列数不齐**：同一表里行长不同 → 多半有合并单元格
     - **表头有空单元格**：Excel 的合并单元格只有锚点有值 → 表头出现空格
-      （Word 的合并单元格会**重复**文本，所以这条抓不到 Word，这是已知局限）
+
+    ⚠️ **抓不到 Word 的合并**（2026-09-30 实测）：python-docx 会把合并单元格的文本
+    **重复**到每个被并的格里（`差旅标准 | 差旅标准 | 备注`），所以上面两条**都不成立**。
+    → Word 那边由 `parsers._docx_table_has_merges()` 查 XML 的 `gridSpan` / `vMerge` 补上
+    （即口径说的「查 rowspan/colspan」）。**两个判据互补，缺一不可。**
 
     ⚠️ 它是"要不要多进一路向量"的**保守开关**，不是正确性判据 ——
     真正的正确性由 `missing_numbers()` 守。误判成 complex 只是多占一点向量空间。

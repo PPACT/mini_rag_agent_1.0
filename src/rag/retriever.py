@@ -9,7 +9,15 @@ from src.vector_store.base import AccessFilter, Chunk, get_vector_store
 
 
 def format_context(chunks: list[Chunk]) -> str:
-    """把命中切片拼成带 [来源N] 标记的上下文。"""
+    """把命中切片拼成带 [来源N] 标记的上下文。
+
+    ⚠️ **刻意只放 `content`，不放 `raw_table`**（2.0-1 口径，别"顺手"改）：
+    表格的 `content` 是**自然语言版**，而它受一条验收管着 ——
+    「原表里的每个数值都必须在自然语言版里被找到」（`tables.missing_numbers`，
+    有测试守着）。保真既然已由那道闸保证，这里再塞一遍原表只会**占 token**、
+    并且与 `content` 内容重复。
+    原表的作用是**给人核对**（随 `Source` 返回前端），不是给模型抄。
+    """
     parts = []
     for i, c in enumerate(chunks, 1):
         parts.append(f"[来源{i}] (文件:{c.source_file}, 块:{c.chunk_index})\n{c.content}")

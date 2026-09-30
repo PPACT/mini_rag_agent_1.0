@@ -6,9 +6,10 @@ import os
 from src.cache.redis_client import invalidate_cache
 from src.config.settings import get_settings
 from src.db.connection import get_pool
-from src.document_parser.loader import load_text
-from src.document_parser.semantic_splitter import split_text
+from src.document_parser.chunking import split_blocks
+from src.document_parser.loader import load_document
 from src.embedding.base import get_embedding
+from src.observability.tracer import audit
 from src.vector_store.base import Chunk, get_vector_store
 
 
@@ -34,33 +35,49 @@ async def process_document(
     )
     try:
         file_path = os.path.join(settings.upload_dir_abs, row["filename"])
-        text = load_text(file_path)
+        # 2.0：走三层路由解析（返回块 + 页码 + 原表），不再只拿一份纯文本
+        parsed = load_document(file_path)
+        chunks = split_blocks(parsed, settings.chunk_size, settings.chunk_overlap)
+        if not chunks:
+            # 报错要说清"用了哪个解析器、解出多少块"——否则只是又一句"无有效文本"
+            raise ValueError(
+                f"解析后无有效文本（解析器 {parsed.parser}，"
+                f"块数 {len(parsed.blocks)}，警告 {len(parsed.warnings)}）"
+            )
 
-        text_chunks = split_text(text, settings.chunk_size, settings.chunk_overlap)
-        if not text_chunks:
-            raise ValueError("解析后无有效文本")
+        # 审计：**实际用了哪个解析器**、各类块多少（协议 P-2 要能核实实际生效值）
+        audit("parse", document_id=document_id, kb=kb, parser=parsed.parser,
+              blocks=len(parsed.blocks), kinds=parsed.kind_counts(),
+              chunks=len(chunks), warnings=parsed.warnings[:5])
 
         embedding = get_embedding()
-        vectors = await embedding.embed([tc.text for tc in text_chunks])
+        # ⚠️ **向量只算 content**（表格这里是自然语言版）——
+        # 原表**不进向量**，而是随 `raw_table` 入库、只进词法（2.0-1 口径）。
+        # 裸表的语义依赖行列头，向量抓不住；且吃它会挤占向量 top-k 席位。
+        vectors = await embedding.embed([c.text for c in chunks])
 
         version = row["version"]
+        # D9-③：`source_file` 是**对外溯源**的字段（还会进 LLM 上下文），
+        # 必须用原始文件名而非 UUID 落盘名。存量行 original_name 为 NULL
+        # （0004 迁移不回填假数据），此时回落 filename。
+        source_name = row["original_name"] or row["filename"]
         chunk_objs = [
             Chunk(
                 document_id=document_id,
                 chunk_index=i,
-                content=tc.text,
-                # D9-③：`source_file` 是**对外溯源**的字段（还会进 LLM 上下文），
-                # 必须用原始文件名而非 UUID 落盘名。存量行 original_name 为 NULL
-                # （0004 迁移不回填假数据），此时回落 filename。
-                source_file=row["original_name"] or row["filename"],
+                content=c.text,
+                source_file=source_name,
                 document_version=version,
                 department=department,
                 secret_level=secret_level,
-                start_offset=tc.start,
-                end_offset=tc.end,
-                title=tc.title,
+                start_offset=c.start,
+                end_offset=c.end,
+                title=c.title,
+                page=c.page,
+                raw_table=c.raw_table,
+                table_complex=c.table_complex,
             )
-            for i, tc in enumerate(text_chunks)
+            for i, c in enumerate(chunks)
         ]
 
         store = get_vector_store(kb)
@@ -69,7 +86,7 @@ async def process_document(
         await pool.execute(
             "UPDATE documents SET status='completed', chunk_count=$2, updated_at=now() WHERE id=$1::uuid",
             document_id,
-            len(text_chunks),
+            len(chunks),
         )
         await invalidate_cache(kb)   # D9-⑦：只清**本库**的问答缓存，不波及另一个库
     except Exception as e:  # noqa: BLE001

@@ -28,6 +28,28 @@ class Chunk:
     end_offset: int | None = None
     title: str | None = None
     is_deprecated: bool = False
+
+    # ---- 2.0 解析元数据（迁移 0005）----
+    page: int | None = None
+    """1-based 页码。**不适用就是 None**（Word/Excel 无稳定页码）—— 不拿 0 假装。"""
+
+    raw_table: str | None = None
+    """表格块的**原表 Markdown**。⚠️ **只进词法、不进向量**（2.0-1 口径）。
+
+    向量只吃 `content`（自然语言版）：裸表的语义依赖行列头，单 chunk 的向量抓不住，
+    且会挤占向量 top-k 席位。RRF 又按 chunk_id 去重 → 同一 chunk 走两路命中只算一次。
+
+    ⚠️ **但别以为"进词法"= 多一条精确召回路径**（2026-09-30 实测）：
+    自然语言版**逐字保留**所有值（那是 2.0-1 的保真验收），所以
+    `tokenize(content + raw_table)` 与 `tokenize(content)` 的 **token 集合完全相同**
+    （实测 `raw_table` 独占 token 数 = **0**）。
+    它的真实作用是**词频提升**（ts_rank 计次）+ **保险**（自然语言版将来若有损，值还在索引里），
+    以及**给人看**（`Source.raw_table`，引用里核对原表）。详见 `document_parser/tables.py`。
+    """
+
+    table_complex: bool = False
+    """复杂表（嵌套表头 / 多级合并）→ 其**原表也进向量**。是"这类"进，不是全局都进。"""
+
     id: str | None = None          # 检索结果回填；写入时为空
     score: float = 0.0             # 相似度（检索结果）
 

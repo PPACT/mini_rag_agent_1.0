@@ -8,7 +8,8 @@ from src.vector_store.base import AccessFilter, Chunk, VectorStore
 _SELECT_COLS = """
     c.id::text, c.document_id::text, c.chunk_index, c.content,
     c.source_file, c.department, c.secret_level,
-    c.start_offset, c.end_offset, c.title
+    c.start_offset, c.end_offset, c.title,
+    c.page, c.raw_table, c.table_complex
 """
 
 # 向量距离的原生运算符形态（$1 = 查询向量）。
@@ -28,6 +29,9 @@ def _row_to_chunk(r) -> Chunk:
         start_offset=r["start_offset"],
         end_offset=r["end_offset"],
         title=r["title"],
+        page=r["page"],
+        raw_table=r["raw_table"],
+        table_complex=r["table_complex"],
         score=float(r["score"]),
     )
 
@@ -198,9 +202,10 @@ class PgVectorStore(VectorStore):
                         """
                         INSERT INTO chunks (document_id, chunk_index, document_version,
                                             content, embedding, department, secret_level, source_file,
-                                            start_offset, end_offset, title, content_tsv)
+                                            start_offset, end_offset, title,
+                                            page, raw_table, table_complex, content_tsv)
                         VALUES ($1::uuid, $2, $3, $4, $5::vector, $6, $7, $8, $9, $10, $11,
-                                to_tsvector('simple', $12))
+                                $12, $13, $14, to_tsvector('simple', $15))
                         """,
                         chunk.document_id,
                         chunk.chunk_index,
@@ -213,7 +218,22 @@ class PgVectorStore(VectorStore):
                         chunk.start_offset,
                         chunk.end_offset,
                         chunk.title,
-                        tokenize(chunk.content),  # 中文需 Python 侧分词后再交给 tsvector
+                        chunk.page,
+                        chunk.raw_table,
+                        chunk.table_complex,
+                        # 词法索引吃两份：自然语言版 + 原表（2.0-1 口径）。
+                        # 向量侧仍只算 content（embedding 在调用方按 content 算好传进来）。
+                        #
+                        # ⚠️ **但别把它的作用说大了**（2026-09-30 实测）：
+                        # 因为自然语言版**逐字保留**所有值（那正是 2.0-1 的保真验收），
+                        # `tokenize(content + raw_table)` 与 `tokenize(content)`
+                        # 的 **token 集合完全相同** —— 实测 `raw_table` 独有的 token 数为 **0**。
+                        # 所以它**不是**"新增了一条精确命中路径"（那样写是错的），真实作用是：
+                        #   ① **词频提升**：ts_rank 计次 → 表格块在数值类查询下排名略微靠前；
+                        #   ② **保险**：万一将来自然语言版变得有损（丢列/丢行），
+                        #      原表还在词法索引里，不至于连值都搜不到。
+                        # 中文需 Python 侧分词后再交给 tsvector。
+                        tokenize(chunk.content + ("\n" + chunk.raw_table if chunk.raw_table else "")),
                     )
 
     async def delete_by_document(self, document_id: str) -> None:

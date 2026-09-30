@@ -73,7 +73,8 @@ def _cache_key(question: str, department: str, secret_level: int, top_k: int, kb
 
 def _to_sources(chunks) -> list[Source]:
     return [
-        Source(source_file=c.source_file, chunk_index=c.chunk_index, score=round(c.score, 4))
+        Source(source_file=c.source_file, chunk_index=c.chunk_index, score=round(c.score, 4),
+               page=c.page, raw_table=c.raw_table)
         for c in chunks
     ]
 

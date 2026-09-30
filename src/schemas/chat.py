@@ -14,6 +14,19 @@ class Source(BaseModel):
     chunk_index: int
     score: float
 
+    # ---- 2.0：引用**随行**信息（2.0-1 / 2.0-4）----
+    page: int | None = None
+    """页码（1-based）。**不适用就是 None** —— Word/Excel 无稳定页码，不拿 0 假装。"""
+
+    raw_table: str | None = None
+    """表格块的**原表 Markdown**，随引用一起给前端（2.0-1 口径）。
+
+    ⚠️ 为什么这里**带**、而送 LLM 的上下文**不带**：
+    - 给**人**：原表的价值最大 —— 用户能**自己核对数值**（这正是"保留原表"的初衷）；
+    - 给**LLM**：自然语言版已被"数值保真"这条验收管住，再塞一遍只占 token、且与 content 重复。
+    两条去向的理由不同，别把它们当成同一条。
+    """
+
 
 class ClarifyOption(BaseModel):
     """歧义澄清时给出的候选（让用户明确意图）。"""

@@ -16,8 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.config.settings import get_settings  # noqa: E402
 from src.db.connection import close_pool, get_pool  # noqa: E402
 from src.db.kb import KB_STRESS  # noqa: E402
-from src.document_parser.loader import load_text  # noqa: E402
-from src.document_parser.semantic_splitter import split_text  # noqa: E402
+from src.document_parser.chunking import split_blocks  # noqa: E402
+from src.document_parser.loader import load_document  # noqa: E402
+from src.document_parser.routing import DocumentParseError, failure_report  # noqa: E402
 from src.embedding.base import get_embedding  # noqa: E402
 from src.vector_store.base import Chunk, get_vector_store  # noqa: E402
 
@@ -77,16 +78,28 @@ async def ingest(exclude_dept: bool = False) -> int:
 
     total_chunks = 0
     scope_count: dict[str, int] = {}
+    failures: list[DocumentParseError] = []   # 2.0-3：**失败文件清单**，不再静默
     for i, path in enumerate(files, 1):
         filename = path.name
         doc_id = doc_id_for(filename)
         scope = _scope_of(filename, manifest)   # 按真实范围标注（而非全标 IT）
+
+        # ⚠️ **逐篇 try**：以前一篇解析失败会**中断整批灌库**（后面的文件全没进）。
+        # 现在单篇失败只记进清单、继续跑 —— 最后统一打印。
+        try:
+            parsed = load_document(str(path))
+            chunks = split_blocks(parsed, settings.chunk_size, settings.chunk_overlap)
+            if not chunks:
+                raise ValueError(f"解析后无有效文本（解析器 {parsed.parser}）")
+            # ⚠️ 向量只算 content（表格是自然语言版）；原表随 raw_table 入库、只进词法
+            vectors = await embedding.embed([c.text for c in chunks])
+        except (DocumentParseError, ValueError) as e:
+            failures.append(e if isinstance(e, DocumentParseError) else DocumentParseError(str(path), str(e)))
+            if i % 100 == 0 or i == len(files):
+                print(f"  进度 {i}/{len(files)} 篇，累计 {total_chunks} 切片（失败 {len(failures)}）")
+            continue
+
         scope_count[scope] = scope_count.get(scope, 0) + 1
-
-        text = load_text(str(path))
-        chunks = split_text(text, settings.chunk_size, settings.chunk_overlap)
-        vectors = await embedding.embed([c.text for c in chunks])
-
         chunk_objs = [
             Chunk(
                 document_id=doc_id,
@@ -98,6 +111,9 @@ async def ingest(exclude_dept: bool = False) -> int:
                 start_offset=c.start,
                 end_offset=c.end,
                 title=c.title,
+                page=c.page,
+                raw_table=c.raw_table,
+                table_complex=c.table_complex,
             )
             for j, c in enumerate(chunks)
         ]
@@ -122,10 +138,20 @@ async def ingest(exclude_dept: bool = False) -> int:
         total_chunks += len(chunks)
 
         if i % 100 == 0 or i == len(files):
-            print(f"  进度 {i}/{len(files)} 篇，累计 {total_chunks} 切片")
+            print(f"  进度 {i}/{len(files)} 篇，累计 {total_chunks} 切片（失败 {len(failures)}）")
 
     top = sorted(scope_count.items(), key=lambda kv: -kv[1])[:5]
     print(f"范围分布（前5）: {top}{' ...' if len(scope_count) > 5 else ''}")
+
+    # 2.0-3：失败清单**一定要打出来**（以前只会在中途炸掉，看不到哪几篇坏了）
+    if failures:
+        print(f"\n⚠️ {len(failures)} 篇解析失败（已跳过，未入库）：")
+        for err in failures[:20]:
+            print(failure_report(err))
+        if len(failures) > 20:
+            print(f"  …另有 {len(failures) - 20} 篇，见上方规律")
+    else:
+        print("\n✅ 全部解析成功，无失败文件")
     total = await store.count()
     print(f"完成，库中切片总数 {total}")
     return total

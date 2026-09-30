@@ -258,13 +258,37 @@ def _read_text(path: str) -> tuple[str, str]:
 
 
 def parse_plain(path: str) -> ParsedDoc:
-    """Markdown / 纯文本 / 代码。按空行分段；认得 `#` 标题与 ``` 代码围栏。"""
+    """Markdown / 纯文本 / **代码**。按空行分段；认得 `#` 标题与 ``` 代码围栏。
+
+    ⚠️ **代码文件整块产出**（`2.0-24` 前半）：
+    以前 `.py` 走的是"按空行分段"→ 实测 `23_edge_collector.py` 被切成 **20 块**，
+    而 `chunking` 的「**代码整块**」策略只对 `kind == "code"` 生效 →
+    **那条策略对代码文件从未生效**。现在 `.py` 直接产**一个 `code` 块**。
+
+    ⚠️ **本轮不做 tree-sitter 按函数/类切**（那是 `2.0-24` 后半）——
+    **留位置**：整块切会产出一个超长块（`23_...py` 约 250 行），
+    正是将来与"按函数/类切"对比的**基线**。
+    """
     text, enc = _read_text(path)
     is_md = path.lower().endswith((".md", ".markdown"))
     blocks: list[Block] = []
     warnings: list[str] = []
     if enc != "utf-8":
         warnings.append(f"编码不是 UTF-8（实测 {enc}），已转码")
+
+    # 代码文件 → 整块（**延迟导入**避免与 routing 循环 import）
+    from src.document_parser.routing import kind_by_extension
+
+    ext = path.lower().rsplit(".", 1)[-1]
+    if kind_by_extension(ext) == "code":
+        body = text.strip()
+        if not body:
+            return ParsedDoc(blocks=[], parser="plain", warnings=[*warnings, "代码文件为空"])
+        return ParsedDoc(
+            blocks=[Block(kind="code", text=body, meta={"lang": ext})],
+            parser="plain",
+            warnings=warnings,
+        )
 
     buf: list[str] = []
     in_code = False

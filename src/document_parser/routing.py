@@ -122,6 +122,17 @@ _ZIP_MARKERS: tuple[tuple[str, str], ...] = (
 )
 
 
+def kind_by_extension(ext: str) -> str | None:
+    """后缀 → 类型（**唯一事实源**，供解析器内部自查用）。
+
+    ⚠️ 为什么要有这个口子：`parse_plain` 需要知道"这是不是代码文件"，
+    但它**不能自己再抄一份扩展名清单** —— 两份清单必然漂移，
+    而漂移的后果是**静默的**（`.foo` 路由判成 code，解析却当普通文本）。
+    循环 import 用**函数内延迟导入**解决（`parsers` 在调用时导入本模块）。
+    """
+    return _EXT_KIND.get(ext.lower().lstrip("."))
+
+
 def supported_extensions() -> frozenset[str]:
     """**本模块是"支持哪些格式"的唯一事实源** —— 供上传接口的校验直接引用。
 

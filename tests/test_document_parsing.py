@@ -337,3 +337,51 @@ def test_markdown_code_fence_is_a_code_block(tmp_path):
     p.write_text("正文。\n\n```python\nprint(1)\n```\n", encoding="utf-8")
     kinds = [b.kind for b in load_document(str(p)).blocks]
     assert "code" in kinds
+
+
+# ---------------------------------------------------------------- 代码文件（2.0-24 前半）
+
+
+def test_code_file_becomes_one_code_block(tmp_path):
+    """**回归**：代码文件必须产出**整块** `code` 块。
+
+    以前 `.py` 走"按空行分段" → 实测 `23_edge_collector.py` 被切成 **20 块**，
+    而 `chunking` 的「代码整块」策略只对 `kind == "code"` 生效 →
+    **那条策略对代码文件从未生效**（声明了、却没作用）。
+    """
+    p = tmp_path / "m.py"
+    p.write_text("import os\n\n\ndef f():\n    return 1\n\n\nclass C:\n    pass\n", encoding="utf-8")
+    doc = load_document(str(p))
+    assert doc.kind_counts() == {"code": 1}
+    assert doc.blocks[0].meta.get("lang") == "py"
+
+
+def test_code_block_is_never_split(tmp_path):
+    """整块不切：`chunk_size` 压到极小也**必须**只有一块。"""
+    from src.document_parser.chunking import split_blocks
+
+    p = tmp_path / "big.py"
+    p.write_text("\n\n\n".join(f"def f{i}():\n    return {i}" for i in range(50)), encoding="utf-8")
+    cs = split_blocks(load_document(str(p)), chunk_size=10, overlap=2)
+    assert len(cs) == 1, "代码块整块不切（tree-sitter 按函数切是 2.0-24 后半，本轮不做）"
+
+
+def test_code_extensions_have_one_source_of_truth():
+    """⚠️ `.py` 是不是代码，必须来自**路由表** —— 不能另抄一份清单（两份必然漂移）。"""
+    from src.document_parser.routing import kind_by_extension, supported_extensions
+
+    assert kind_by_extension("py") == "code"
+    assert kind_by_extension("PY") == "code"          # 大小写不敏感
+    assert kind_by_extension(".py") == "code"         # 带点也认
+    assert kind_by_extension("xlsx") == "xlsx"
+    assert "py" in supported_extensions()
+
+
+def test_same_content_in_txt_is_not_a_code_block(tmp_path):
+    """反向：**同样内容**放在 `.txt` 里**不该**变成 code 块（证明派发真的按扩展名）。"""
+    body = "import os\n\n\ndef f():\n    return 1\n"
+    p = tmp_path / "m.txt"
+    p.write_text(body, encoding="utf-8")
+    # 断言抓**语义**（"不该有 code 块"），不数它切成几段 ——
+    # 段数取决于按空行切的实现细节，写死会把无关改动弄红（今天第二次踩这个）
+    assert "code" not in load_document(str(p)).kind_counts()

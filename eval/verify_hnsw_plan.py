@@ -157,7 +157,7 @@ async def main() -> None:
     print("  · C 仍是 Seq Scan 属**预期**：降权排序只能用表达式，索引用不上。")
     print("  · ⚠️ 修复后 `hnsw.ef_search` 才真正生效（修复前是空转），")
     print("    E1「ef_search 40→100 恢复满召回」届时重新适用（见 优化方案 §5 R11）。")
-    print("  · ⚠️ **本脚本只回答"走不走索引"，不回答"结果变了多少"** ——")
+    print("  · ⚠️ **本脚本只回答「走不走索引」，不回答「结果变了多少」** ——")
     print("    走索引 = 近似检索，top-K 可能与精确扫描不同。召回对照见 eval/run_ann_eval.py。")
     await close_pool()
 

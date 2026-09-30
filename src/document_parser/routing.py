@@ -277,8 +277,10 @@ def parse_document(path: str) -> ParsedDoc:
         #  不重建则那些文件的表格块数为 0 → 表格数值命中率的**分母是假的**）
         # ⚠️ 放在这里而不是调用方：让**所有**解析入口自动受益，不能靠"记得调"
         doc, _recovery = recover_tables(doc)
-        if plan.note:
-            doc.warnings.insert(0, plan.note)
+        # ⚠️ `plan.note` **不进** `doc.warnings`（2026-09-30 改）：
+        # 它是**路由层的事实**（如"该类型只有一个解析器"），对**每个**同类型文件都成立
+        # —— 实测当时 **21/21** 个文件都带它，于是"警告数"这一列再也分不出谁真有毛病。
+        # 需要它的调用方直接看 `route_file(...).note`（`RoutePlan` 里一直有）。
         return doc
 
     raise ParseFailedError(

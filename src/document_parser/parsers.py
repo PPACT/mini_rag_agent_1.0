@@ -134,12 +134,23 @@ def parse_docx(path: str) -> ParsedDoc:
 
     ⚠️ Word 没有稳定页码概念（分页由渲染决定）→ `page` 一律为 `None`。
     用 0 或 1 假装"有页码"会让引用溯源显示一个**编造**的页码，那比没有更糟。
+
+    ⚠️ **本模块的静态局限（写在这里，不进 per-document `warnings`）**：
+    `python-docx` 不暴露**目录 / 页眉 / 页脚**，故这三处内容不参与解析。
+    → 它是**每一篇** docx 都成立的事实，不是"这一篇有问题"；
+      塞进 `warnings` 会让那一列失去区分度（实测 21/21 个文件都 ≥1 条警告）。
     """
     import docx
 
     doc = docx.Document(path)
     blocks: list[Block] = []
     tables = 0
+
+    # ⚠️ 这里**不记**"未解析目录/页眉页脚"那种警告（2026-09-30 改）：
+    # 它对**每个** docx 都成立（实测语料 6/6 都有），属于**静态局限**而非"这篇有问题"。
+    # 把它塞进 per-document warnings 会把那一列变成噪声 ——
+    # 于是"警告数"再也分不出谁真有毛病（实测当时 21/21 个文件都 ≥1 条警告）。
+    # 静态局限写在模块 docstring 里，**一次说清**：
     for item in _iter_docx_body(doc):
         if item.__class__.__name__ == "Table":
             rows = _docx_table_rows(item)
@@ -152,8 +163,7 @@ def parse_docx(path: str) -> ParsedDoc:
             if text:
                 blocks.append(Block(kind="heading" if _is_heading(item) else "paragraph",
                                     text=text))
-    warnings = [f"未解析目录/页眉页脚（python-docx 不暴露这些）"] if blocks else []
-    return ParsedDoc(blocks=blocks, parser="python-docx", warnings=warnings)
+    return ParsedDoc(blocks=blocks, parser="python-docx")
 
 
 # ---------------------------------------------------------------- Excel

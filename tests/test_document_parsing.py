@@ -332,6 +332,40 @@ def test_gbk_file_is_transcoded_not_silently_mangled(tmp_path):
     assert any("编码" in w for w in doc.warnings), doc.warnings
 
 
+# ---------------------------------------------------------------- 警告分层（第1.5批-③）
+
+
+def test_static_facts_do_not_pollute_warnings(tmp_path):
+    """⚠️ **回归**：**静态事实不该进 per-document `warnings`**（第 1 批发现 ③）。
+
+    实测当时 **21/21** 个文件都带 ≥1 条警告，而它们**全是静态的**
+    （"该类型只有一个解析器" 21×、"未解析页眉页脚" 6×）→
+    **"警告数"这一列再也分不出谁真有毛病**。
+    """
+    p = _make_docx(tmp_path / "w.docx", paragraphs=["一段"], table=REIMBURSE_TABLE)
+    doc = load_document(str(p))
+    assert doc.warnings == [], f"docx 不该带静态警告，实际 {doc.warnings}"
+
+
+def test_route_note_is_still_available_where_it_belongs(tmp_path):
+    """去噪**不等于**丢信息：那条路由事实仍在 `RoutePlan.note` 上，需要的人能看到。"""
+    p = _make_docx(tmp_path / "w.docx", paragraphs=["一段"])
+    assert route_file(str(p)).note, "路由的 note 不该被一起删掉"
+
+
+def test_dynamic_warnings_still_fire(tmp_path):
+    """**反向**：别为了去噪把真闸也拆了 —— 真·动态问题必须继续报。"""
+    p = tmp_path / "gbk.txt"
+    p.write_bytes("中文，含数值 12345。".encode("gbk"))
+    assert any("编码" in w for w in load_document(str(p)).warnings)
+
+
+# ⚠️ 这里**故意没有再写**一条"PDF 空页仍报警"的测试：
+# 造一个"有页但无文本层"的 PDF 成本高，而写一条"构造 ParsedDoc 再断言它的字段"
+# 是**恒真的废话** —— 它看起来像覆盖、其实什么都没测（同"假绿灯"那类问题）。
+# `test_dynamic_warnings_still_fire` 已覆盖"动态警告机制仍活着"这件事。
+
+
 def test_markdown_code_fence_is_a_code_block(tmp_path):
     p = tmp_path / "code.md"
     p.write_text("正文。\n\n```python\nprint(1)\n```\n", encoding="utf-8")

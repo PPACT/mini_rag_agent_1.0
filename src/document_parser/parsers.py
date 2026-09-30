@@ -1,0 +1,266 @@
+"""各格式解析器 —— 全部产出统一的 `ParsedDoc`（见 `blocks.py`）。
+
+设计约束（都来自踩过的坑）：
+
+1. **每个解析器只声明"我实际能做到什么"** —— 做不到的**不假装**。
+   例如 PDF 的表格**不单独提取**：`extract_text()` 已经把表格文字带出来了，
+   再单独提一遍会让同一段内容进两次检索；而 PDF 的表格结构识别质量本就不稳。
+   → 这条**记进已知局限**，不写成"已支持表格"。
+2. **解析器名要如实记进 `ParsedDoc.parser`** —— 路由说要用什么 ≠ 实际用了什么（协议 P-2）。
+3. **非致命问题进 `warnings`**，致命问题抛错（由 `routing.py` 统一处理成显式失败）。
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+from src.document_parser.blocks import Block, ParsedDoc
+from src.document_parser.tables import is_complex, render_nl, rows_to_markdown
+
+# Excel 一个块最多放多少数据行：超过就按行分组（**重复表头**），
+# 免得一整个大 sheet 变成一个超长 chunk —— 那样既切不动、也检索不准。
+# 放在解析器而不是切块层，是为了让切块层只管"段落怎么切"，不必懂表格结构。
+_XLSX_ROWS_PER_BLOCK = 60
+
+
+def _table_block(rows: list[list[str]], caption: str | None, page: int | None = None,
+                 **meta) -> Block:
+    """把二维表变成一个 table block（自然语言版 + 原表 + 复杂度）。"""
+    return Block(
+        kind="table",
+        text=render_nl(rows, caption=caption),
+        page=page,
+        raw_table=rows_to_markdown(rows),
+        table_complex=is_complex(rows),
+        meta=meta,
+    )
+
+
+# ---------------------------------------------------------------- PDF
+
+
+def parse_pdf(path: str) -> ParsedDoc:
+    """PDF（pdfplumber）。**逐页**产出段落块，页码 1-based。
+
+    ⚠️ 已知局限：**表格不单独提取**（理由见模块 docstring）。PDF 里的表格文字
+    仍会随 `extract_text()` 进入 `content`，所以**数值仍可被检索命中**，
+    只是拿不到 `raw_table`（词法侧少一条精确值召回路径）。
+    """
+    import pdfplumber
+
+    blocks: list[Block] = []
+    warnings: list[str] = []
+    with pdfplumber.open(path) as pdf:
+        for i, page in enumerate(pdf.pages, 1):
+            text = (page.extract_text() or "").strip()
+            if text:
+                blocks.append(Block(kind="paragraph", text=text, page=i))
+            else:
+                # 无文本层（多半是扫描件）——**记下来**，不静默跳过（2.0-3 的精神）
+                warnings.append(f"第 {i} 页无文本层（可能是扫描件，需 OCR）")
+        pages = len(pdf.pages)
+    return ParsedDoc(blocks=blocks, parser="pdfplumber", pages=pages, warnings=warnings)
+
+
+# ---------------------------------------------------------------- Word
+
+
+def _iter_docx_body(doc):
+    """按**文档顺序**产出段落与表格。
+
+    ⚠️ 不能用 `doc.paragraphs` + `doc.tables` 两个集合分开取 ——
+    那样会丢掉"表格在第几段之后"这个顺序信息，而顺序决定切块边界与标题归属。
+    """
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    for child in doc.element.body.iterchildren():
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            yield Paragraph(child, doc)
+        elif tag == "tbl":
+            yield Table(child, doc)
+
+
+def _docx_table_rows(table) -> list[list[str]]:
+    return [[cell.text.strip() for cell in row.cells] for row in table.rows]
+
+
+def _is_heading(paragraph) -> bool:
+    """判断段落是不是标题。
+
+    中英两种都要认：`Heading 1` / `标题 1`（中文版 Word 生成的是后者）。
+    """
+    name = (getattr(paragraph.style, "name", "") or "").strip()
+    return name.startswith("Heading") or name.startswith("标题")
+
+
+def parse_docx(path: str) -> ParsedDoc:
+    """Word（python-docx）。**含表格**，段落与表格按文档顺序排列。
+
+    ⚠️ Word 没有稳定页码概念（分页由渲染决定）→ `page` 一律为 `None`。
+    用 0 或 1 假装"有页码"会让引用溯源显示一个**编造**的页码，那比没有更糟。
+    """
+    import docx
+
+    doc = docx.Document(path)
+    blocks: list[Block] = []
+    tables = 0
+    for item in _iter_docx_body(doc):
+        if item.__class__.__name__ == "Table":
+            rows = _docx_table_rows(item)
+            if rows and any(any(c for c in r) for r in rows):
+                blocks.append(_table_block(rows, caption=None, table_index=tables))
+                tables += 1
+        else:
+            text = (item.text or "").strip()
+            if text:
+                blocks.append(Block(kind="heading" if _is_heading(item) else "paragraph",
+                                    text=text))
+    warnings = [f"未解析目录/页眉页脚（python-docx 不暴露这些）"] if blocks else []
+    return ParsedDoc(blocks=blocks, parser="python-docx", warnings=warnings)
+
+
+# ---------------------------------------------------------------- Excel
+
+
+def parse_xlsx(path: str) -> ParsedDoc:
+    """Excel（openpyxl）。**每个 sheet 一张表**；大表按行分组（重复表头）。"""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    blocks: list[Block] = []
+    warnings: list[str] = []
+    try:
+        for ws in wb.worksheets:
+            rows = [
+                ["" if c is None else str(c).strip() for c in row]
+                for row in ws.iter_rows(values_only=True)
+            ]
+            # 去掉整行为空的（Excel 的 used range 常拖出一堆空行）
+            rows = [r for r in rows if any(c for c in r)]
+            if not rows:
+                warnings.append(f"sheet「{ws.title}」无内容")
+                continue
+            header, body = rows[0], rows[1:]
+            if not body:
+                blocks.append(_table_block(rows, caption=ws.title, sheet=ws.title))
+                continue
+            for i in range(0, len(body), _XLSX_ROWS_PER_BLOCK):
+                group = [header] + body[i:i + _XLSX_ROWS_PER_BLOCK]
+                part = f"{ws.title}（第 {i + 1}-{min(i + _XLSX_ROWS_PER_BLOCK, len(body))} 行）"
+                blocks.append(_table_block(group, caption=part, sheet=ws.title))
+    finally:
+        wb.close()
+    return ParsedDoc(blocks=blocks, parser="openpyxl", warnings=warnings)
+
+
+# ---------------------------------------------------------------- CSV
+
+
+def parse_csv(path: str) -> ParsedDoc:
+    """CSV（stdlib `csv`）。整份当一个表；caption 用文件名。"""
+    import csv
+
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        rows = [[(c or "").strip() for c in row] for row in csv.reader(f)]
+    rows = [r for r in rows if any(c for c in r)]
+    if not rows:
+        return ParsedDoc(blocks=[], parser="csv", warnings=["CSV 无有效行"])
+    caption = Path(path).stem
+    blocks = [
+        _table_block([rows[0]] + rows[1 + i:1 + i + _XLSX_ROWS_PER_BLOCK], caption=caption)
+        for i in range(0, max(len(rows) - 1, 1), _XLSX_ROWS_PER_BLOCK)
+    ]
+    return ParsedDoc(blocks=blocks, parser="csv")
+
+
+# ---------------------------------------------------------------- PPT
+
+
+def parse_pptx(path: str) -> ParsedDoc:
+    """PPT（python-pptx）。一张 slide 一个块；slide 内表格也提出来。"""
+    import pptx
+
+    prs = pptx.Presentation(path)
+    blocks: list[Block] = []
+    for i, slide in enumerate(prs.slides, 1):
+        texts: list[str] = []
+        for shape in slide.shapes:
+            if getattr(shape, "has_table", False):
+                rows = [[cell.text.strip() for cell in row.cells] for row in shape.table.rows]
+                if rows and any(any(c for c in r) for r in rows):
+                    blocks.append(_table_block(rows, caption=f"第 {i} 页", slide=i))
+            elif shape.has_text_frame:
+                t = (shape.text_frame.text or "").strip()
+                if t:
+                    texts.append(t)
+        if texts:
+            blocks.append(Block(kind="paragraph", text="\n".join(texts),
+                                meta={"slide": i}))
+    return ParsedDoc(blocks=blocks, parser="python-pptx")
+
+
+# ---------------------------------------------------------------- 纯文本 / Markdown / 代码
+
+
+def _read_text(path: str) -> tuple[str, str]:
+    """读文本文件，**顺带做编码探测**（CLN-013）。
+
+    返回 (文本, 检测到的编码)。解码失败时抛错 —— 由 routing 变成显式失败，
+    **不用 errors="ignore" 静默丢字符**（那会悄悄吃掉正文）。
+    """
+    raw = Path(path).read_bytes()
+    try:
+        return raw.decode("utf-8"), "utf-8"
+    except UnicodeDecodeError:
+        from charset_normalizer import from_bytes
+
+        best = from_bytes(raw).best()
+        if best is None:
+            raise ValueError("无法确定文件编码（UTF-8 解码失败，charset-normalizer 也判不出）")
+        return str(best), str(best.encoding)
+
+
+def parse_plain(path: str) -> ParsedDoc:
+    """Markdown / 纯文本 / 代码。按空行分段；认得 `#` 标题与 ``` 代码围栏。"""
+    text, enc = _read_text(path)
+    is_md = path.lower().endswith((".md", ".markdown"))
+    blocks: list[Block] = []
+    warnings: list[str] = []
+    if enc != "utf-8":
+        warnings.append(f"编码不是 UTF-8（实测 {enc}），已转码")
+
+    buf: list[str] = []
+    in_code = False
+    code_buf: list[str] = []
+
+    def flush() -> None:
+        if buf:
+            blocks.append(Block(kind="paragraph", text="\n".join(buf).strip()))
+            buf.clear()
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if is_md and stripped.startswith("```"):
+            if in_code:
+                blocks.append(Block(kind="code", text="\n".join(code_buf).strip()))
+                code_buf.clear()
+            else:
+                flush()
+            in_code = not in_code
+            continue
+        if in_code:
+            code_buf.append(line)
+        elif is_md and stripped.startswith("#"):
+            flush()
+            blocks.append(Block(kind="heading", text=stripped.lstrip("# ").strip()))
+        elif not stripped:
+            flush()
+        else:
+            buf.append(line)
+    flush()
+    if code_buf:  # 围栏未闭合 —— 不丢内容，但要说一声
+        blocks.append(Block(kind="code", text="\n".join(code_buf).strip()))
+        warnings.append("代码围栏未闭合，已按普通代码块收尾")
+    blocks = [b for b in blocks if b.text]
+    return ParsedDoc(blocks=blocks, parser="plain", warnings=warnings)

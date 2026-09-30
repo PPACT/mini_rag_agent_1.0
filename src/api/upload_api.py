@@ -10,12 +10,17 @@ from src.auth.deps import User, get_current_user
 from src.config.settings import get_settings
 from src.db.connection import get_pool
 from src.db.kb import KB_REAL, validate
+from src.document_parser.routing import supported_extensions
 from src.schemas.document import DocumentStatus, UploadResponse
 from src.tasks.queue import enqueue_process_document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-_ALLOWED = {"pdf", "docx", "doc", "pptx", "ppt"}
+# ⚠️ **不要在这里另写一份格式清单** —— 它必然与解析层漂移。
+# 旧版本此处写着 {"pdf","docx","doc","pptx","ppt"}，其中 `doc` / `ppt`
+# **从来就读不了**（python-docx / python-pptx 都不支持旧版二进制格式）：
+# 上传放行 → 进 worker 才失败。现在直接引用路由表的唯一事实源。
+_ALLOWED = supported_extensions()
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -42,7 +47,12 @@ async def upload_document(
     settings = get_settings()
     ext = file.filename.lower().rsplit(".", 1)[-1] if "." in (file.filename or "") else ""
     if ext not in _ALLOWED:
-        raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
+        # 报错要能自解释：告诉调用方**支持哪些**，而不是只说他传错了
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型: {ext or '(无扩展名)'}；"
+                   f"支持：{'、'.join(sorted(_ALLOWED))}",
+        )
 
     if secret_level > user.secret_level:
         raise HTTPException(

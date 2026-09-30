@@ -1,0 +1,244 @@
+"""解析层（2.0-2 路由 / 2.0-1 表格 / 2.0-3 显式失败）的测试。
+
+夹具**现场生成**（python-docx / openpyxl 造），所以不依赖任何外部语料 ——
+真实文档到位后，这里再加一层"对真实语料"的验收（见 `2.0-6`）。
+"""
+from __future__ import annotations
+
+import pytest
+
+from src.document_parser.loader import load_document, load_text
+from src.document_parser.routing import (
+    ParseFailedError,
+    UnsupportedFormatError,
+    parse_document,
+    route_file,
+    supported_extensions,
+)
+from src.document_parser.tables import missing_numbers
+
+
+# ---------------------------------------------------------------- 夹具
+
+
+def _make_docx(path, *, paragraphs: list[str], table: list[list[str]] | None = None):
+    import docx
+
+    doc = docx.Document()
+    for p in paragraphs:
+        doc.add_paragraph(p)
+    if table:
+        t = doc.add_table(rows=len(table), cols=len(table[0]))
+        for i, row in enumerate(table):
+            for j, val in enumerate(row):
+                t.cell(i, j).text = str(val)
+    doc.save(str(path))
+    return path
+
+
+def _make_xlsx(path, *, sheets: dict[str, list[list[str]]]):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for name, rows in sheets.items():
+        ws = wb.create_sheet(title=name)
+        for r in rows:
+            ws.append(r)
+    wb.save(str(path))
+    return path
+
+
+REIMBURSE_TABLE = [
+    ["城市等级", "住宿上限（元/晚）"],
+    ["一线城市", "600"],
+    ["二线城市", "400"],
+    ["其他城市", "300"],
+]
+
+
+# ---------------------------------------------------------------- 2.0-3 显式失败
+
+
+def test_known_unsupported_says_why(tmp_path):
+    """`.doc` 认得出但本轮不做 → **明说原因**，不是含糊的"不支持"。"""
+    p = tmp_path / "a.doc"
+    p.write_bytes(b"\xd0\xcf\x11\xe0" + b"\x00" * 20)   # OLE2 头
+    with pytest.raises(UnsupportedFormatError) as ei:
+        route_file(str(p))
+    assert "旧版二进制" in str(ei.value)
+
+
+def test_all_parsers_failed_reports_each_attempt(tmp_path):
+    """格式认得、但解析器全失败 → 报错里要有**每个解析器各自的原因**（2.0-3）。"""
+    p = tmp_path / "broken.pdf"
+    # ⚠️ bytes 字面量只能是 ASCII —— 中文要显式 encode（本节就是被这条绊了一跤）
+    p.write_bytes(b"%PDF-1.4\n" + "这不是真的 PDF 结构".encode())
+    with pytest.raises(ParseFailedError) as ei:
+        parse_document(str(p))
+    detail = ei.value.detail
+    assert "pdfplumber" in str(detail["attempts"])
+    assert detail["route"]           # 路由决策也要留下来，便于定位
+    assert ei.value.path == str(p)
+
+
+def test_failure_is_not_a_silent_empty(tmp_path):
+    """⚠️ 关键回归：**不能"解析不出内容"却当成功返回空**。
+
+    旧实现只抛一句 ValueError；现在的失败必须带文件、路由、逐解析器原因。
+    """
+    p = tmp_path / "broken.docx"
+    p.write_bytes(b"not a zip at all")
+    with pytest.raises(ParseFailedError):
+        parse_document(str(p))
+
+
+# ---------------------------------------------------------------- 2.0-2 文件级路由
+
+
+@pytest.mark.parametrize("name,kind", [
+    ("a.pdf", "pdf"), ("a.docx", "docx"), ("a.xlsx", "xlsx"), ("a.pptx", "pptx"),
+    ("a.csv", "csv"), ("a.md", "markdown"), ("a.txt", "text"), ("a.py", "code"),
+])
+def test_route_by_extension(tmp_path, name, kind):
+    p = tmp_path / name
+    p.write_bytes(b"x")
+    plan = route_file(str(p))
+    assert plan.kind == kind
+    assert plan.confidence == "high"
+    assert any(s.startswith("后缀.") for s in plan.signals)
+
+
+def test_route_by_magic_when_extension_lies(tmp_path):
+    """后缀说是 txt，内容却是 PDF → **magic number 兜住**，且信号可查（P-2）。"""
+    p = tmp_path / "fake.txt"
+    p.write_bytes(b"%PDF-1.4\n%...")
+    plan = route_file(str(p))
+    assert plan.kind == "pdf"
+    assert any(s.startswith("magic.") for s in plan.signals)
+
+
+def test_unknown_extension_falls_back_to_text(tmp_path):
+    p = tmp_path / "a.weird"
+    p.write_bytes("你好".encode())
+    plan = route_file(str(p))
+    assert plan.kind == "text"
+    assert plan.confidence == "low"
+    assert "兜底.纯文本" in plan.signals
+
+
+def test_supported_extensions_is_single_source(tmp_path):
+    """上传接口引用的那份清单必须**来自路由表**（不再各写一份）。"""
+    exts = supported_extensions()
+    assert {"pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "py"} <= set(exts)
+    assert "doc" not in exts and "ppt" not in exts, "旧版二进制格式从来读不了，不该放行"
+
+
+# ---------------------------------------------------------------- 2.0-1 表格入库
+
+
+def test_docx_table_becomes_a_table_block_and_keeps_numbers(tmp_path):
+    """**2.0-1 的验收（文档级）**：表格里的每个数值都要能被找到 —— 且表格不再被丢掉。"""
+    p = _make_docx(tmp_path / "d.docx",
+                   paragraphs=["# 差旅制度", "本制度适用于全体员工。"],
+                   table=REIMBURSE_TABLE)
+
+    doc = load_document(str(p))
+    tables = doc.tables()
+    assert len(tables) == 1, "docx 里的表格必须被提出来（旧实现整块丢掉）"
+    tb = tables[0]
+    assert tb.raw_table and "| 一线城市 | 600 |" in tb.raw_table
+    assert "住宿上限（元/晚）=600" in tb.text
+    # 验收闸：原表里每个数值都在自然语言版里
+    assert missing_numbers(tb.raw_table, tb.text) == []
+    # 整份文档的纯文本里也能找到（表格不再消失在 load_text 的输出里）
+    assert "600" in load_text(str(p))
+
+
+def test_docx_preserves_document_order(tmp_path):
+    """段落与表格必须按**文档顺序**产出 —— 表格在第几段之后决定切块边界。"""
+    p = _make_docx(tmp_path / "o.docx", paragraphs=["前一段"], table=REIMBURSE_TABLE)
+    import docx
+
+    doc = docx.Document(str(p))
+    doc.add_paragraph("后一段")
+    doc.save(str(p))
+
+    kinds = [b.kind for b in load_document(str(p)).blocks]
+    assert kinds == ["paragraph", "table", "paragraph"], kinds
+
+
+def test_docx_headings_are_tagged(tmp_path):
+    """标题要单独成类 —— 切块级路由靠它做章节递归切。"""
+    import docx
+
+    doc = docx.Document()
+    doc.add_heading("第一章 总则", level=1)
+    doc.add_paragraph("正文。")
+    p = tmp_path / "h.docx"
+    doc.save(str(p))
+
+    kinds = [b.kind for b in load_document(str(p)).blocks]
+    assert kinds == ["heading", "paragraph"], kinds
+
+
+def test_xlsx_sheets_become_tables(tmp_path):
+    p = _make_xlsx(tmp_path / "b.xlsx", sheets={
+        "差旅": REIMBURSE_TABLE,
+        "考勤": [["项目", "标准"], ["迟到", "30"]],
+    })
+    doc = load_document(str(p))
+    assert doc.parser == "openpyxl"
+    caps = [b.meta.get("sheet") for b in doc.tables()]
+    assert caps == ["差旅", "考勤"]
+    for tb in doc.tables():
+        assert missing_numbers(tb.raw_table, tb.text) == []
+
+
+def test_xlsx_big_sheet_is_split_with_header_repeated(tmp_path):
+    """大 sheet 要按行分组，**且每组都要带表头** —— 否则后续组的列名就丢了。"""
+    rows = [["行号", "值"]] + [[str(i), str(i * 10)] for i in range(1, 131)]
+    p = _make_xlsx(tmp_path / "big.xlsx", sheets={"大表": rows})
+    tables = load_document(str(p)).tables()
+    assert len(tables) == 3, f"130 行 / 每组 60 行 → 3 组，实际 {len(tables)}"
+    for tb in tables:
+        assert "行号=" in tb.text, "每组都要重复表头，否则后续组的列名丢失"
+
+
+def test_csv_becomes_one_table(tmp_path):
+    p = tmp_path / "c.csv"
+    p.write_text("项目,标准\n迟到,30\n早退,30\n", encoding="utf-8")
+    doc = load_document(str(p))
+    assert doc.tables() and "标准=30" in doc.tables()[0].text
+
+
+def test_page_numbers_only_where_meaningful(tmp_path):
+    """⚠️ Word/Excel **没有稳定页码** → 必须是 None，不能编一个 0/1。"""
+    p = _make_docx(tmp_path / "p.docx", paragraphs=["一段"])
+    assert all(b.page is None for b in load_document(str(p)).blocks)
+
+
+# ---------------------------------------------------------------- 纯文本 / 编码
+
+
+def test_plain_text_splits_paragraphs_and_headings(tmp_path):
+    p = tmp_path / "n.md"
+    p.write_text("# 标题\n\n第一段。\n\n第二段。\n", encoding="utf-8")
+    kinds = [b.kind for b in load_document(str(p)).blocks]
+    assert kinds == ["heading", "paragraph", "paragraph"], kinds
+
+
+def test_gbk_file_is_transcoded_not_silently_mangled(tmp_path):
+    """非 UTF-8 要**转码**并报警，**不能 errors='ignore' 静默吃字**。"""
+    p = tmp_path / "gbk.txt"
+    p.write_bytes("这是一段中文，包含数值 12345。".encode("gbk"))
+    doc = load_document(str(p))
+    assert "12345" in doc.text
+    assert any("编码" in w for w in doc.warnings), doc.warnings
+
+
+def test_markdown_code_fence_is_a_code_block(tmp_path):
+    p = tmp_path / "code.md"
+    p.write_text("正文。\n\n```python\nprint(1)\n```\n", encoding="utf-8")
+    kinds = [b.kind for b in load_document(str(p)).blocks]
+    assert "code" in kinds

@@ -119,8 +119,12 @@ async def complete_with_meta(messages: list[dict], temperature: float = 0.1) -> 
         max_tokens=settings.llm_max_tokens,   # D9-⑩：原为硬编码 2048
         timeout=settings.llm_timeout_judge,   # D9-⑨：原为硬编码 60（等于没有超时）
         num_retries=settings.llm_max_retries_judge,  # 显式 0，不再依赖 litellm 默认值
-        # 换用不支持该参数的模型时，让 litellm 丢掉它而不是直接报错
-        drop_params=True,
+        # ⚠️ **默认 False = 不静默丢弃**（`2.0-41`）。
+        # 原来是写死的 `True`：换 provider 后 `reasoning_effort="none"` 会被**静默丢掉**
+        # → **思考链复活且不报错**（D8 踩过的那个坑）。
+        # 现在不支持就**报错** —— 从"静默失效"变成"响"。
+        # ⚠️ 换 provider 后若这里报错，**那是设计如此**：去 `2.0-42` 补翻译，别改回 True。
+        drop_params=settings.llm_drop_params,
         **extra,
     )
     msg = resp.choices[0].message

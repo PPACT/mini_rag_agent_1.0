@@ -32,6 +32,7 @@ class _StubSettings:
     llm_max_retries_judge = 2
     llm_timeout_generate = 11.0
     llm_max_retries_generate = 4
+    llm_drop_params = False
 
 
 class _Msg:
@@ -67,6 +68,24 @@ def test_complete_takes_budget_from_settings(monkeypatch):
     assert kwargs["max_tokens"] == 777            # ⑩：原为硬编码 2048
     assert kwargs["timeout"] == 3.5               # ⑨：原为硬编码 60
     assert kwargs["num_retries"] == 2             # ⑨：显式传，不再吃 litellm 默认值
+
+
+def test_drop_params_comes_from_settings(monkeypatch):
+    """`2.0-41`：`drop_params` 必须来自配置（原来是写死的 `True`）。"""
+    assert _capture(monkeypatch, llm_drop_params=True)["drop_params"] is True
+    assert _capture(monkeypatch, llm_drop_params=False)["drop_params"] is False
+
+
+def test_drop_params_default_is_false():
+    """⚠️ **默认必须是 `False`** —— 这是 `2.0-41` 的核心。
+
+    `True` 会让**不支持的参数被静默丢掉**：换 provider 后 `reasoning_effort="none"`
+    被丢掉 = **思考链复活，且不报错**（D8 踩过的那个坑）。
+    `False` 让它**直接报错** —— 从"静默失效"变成"响"。
+    """
+    assert get_settings().llm_drop_params is False, (
+        "改回 True 就等于允许静默丢弃 —— 若确需回退，请在交流区说明理由"
+    )
 
 
 def test_default_budget_is_bounded():

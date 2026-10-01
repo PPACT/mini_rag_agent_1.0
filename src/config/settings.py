@@ -169,6 +169,18 @@ class Settings(BaseSettings):
     llm_timeout_generate: float = 20.0    # 生成（Agent）
     llm_max_retries_generate: int = 1
 
+    # `drop_params`：**默认 False = 不静默丢弃**（`2.0-41`）
+    #   True 时 litellm 会把**不支持的参数静默丢掉** —— 换 provider 后
+    #   `reasoning_effort="none"` 被丢掉 = **思考链复活，且不报错**（D8 踩过的那个坑）。
+    #   False 时它**直接报错**：从"静默失效"变成"**响**"。
+    #   ⚠️ 它的作用是"让翻译错了就必须响"，所以排在四层处置的**第一位**（见 `docs/开发记录.md` §3.5）。
+    #   实测（2026-10-01，deepseek provider）：`False` + `reasoning_effort` **正常通过**（0.53s）
+    #   → **当前 provider 下没有别的参数在裸奔**，可安全落地。
+    #   ⚠️ 只波及 **LiteLLM 这条路**（判定/精排）—— 生成链路走 `ChatOpenAI`，不经 litellm。
+    #   换 provider 后若这里开始报错，**那是设计如此**：说明新 provider 不支持该参数，
+    #   该去 `2.0-42`（`ThinkingControl` 适配器）补翻译，而不是把这里改回 True。
+    llm_drop_params: bool = False
+
     @model_validator(mode="after")
     def _reject_unimplemented_backends(self) -> "Settings":
         """fail-closed：把「选了未实现的引擎」挡在**启动期**。

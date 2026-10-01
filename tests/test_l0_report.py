@@ -101,3 +101,64 @@ def test_no_detail_flag_works(tmp_path, flag):
     )
     assert r.returncode == 0
     assert "【汇总】" in r.stdout, "汇总必须仍然打印"
+
+
+# ---------------------------------------------------------------- 2.0-51
+
+
+def test_pct_never_leaves_the_sample_range():
+    """`2.0-51①`：分位数**必须落在样本区间内** —— 回归闸。
+
+    旧实现用 `statistics.quantiles`（默认 `exclusive`），**小样本会外推**：
+    实测给过 `p99 = 2932 > max = 2259`，以及把 `[192, 2259]` 的 p50 报成 **1225**
+    （那是**两点的中点**，不是分位数）。这两个都是真踩过的数，所以直接拿来当用例。
+    """
+    from eval.l0_report import _pct
+
+    for vals in ([192, 2259], [637, 851], [120, 213, 256, 933], [86, 219, 1406]):
+        for q in (50, 90, 99):
+            v = _pct(vals, q)
+            assert min(vals) <= v <= max(vals), f"{vals} 的 p{q} = {v} 超出样本区间"
+    # 反向用例：旧口径在这里给 1225（中点）
+    assert _pct([192, 2259], 50) == 192, "nearest-rank 的 p50 应取到实际样本值 192"
+
+
+def test_caption_count_is_chunk_level(tmp_path):
+    """`2.0-51②`：caption 计数必须发生在**切块后** —— 否则测不到 `2.0-46`/`2.0-48` 的机制。
+
+    ⚠️ 夹具刻意让**加粗手工标题夹在两张表之间**（标题因此独自成一个 text 段），
+    这样 `chunking._merge_heading_captions` 才会把它并成表格的 caption。
+    块级（`doc.tables()`）的 text **没有** `表「` 前缀 —— 所以旧口径会数成 0。
+    """
+    import docx
+
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    d = docx.Document()
+    d.add_paragraph("本制度适用于全体员工。")
+    for label in ("前置项", "营业成本"):
+        t = d.add_table(rows=2, cols=2)
+        t.cell(0, 0).text = "项目"
+        t.cell(0, 1).text = "金额"
+        t.cell(1, 0).text = label
+        t.cell(1, 1).text = "16930"
+        if label == "前置项":
+            d.add_paragraph().add_run("三、成本与费用").bold = True
+    d.save(str(corpus / "a.docx"))
+
+    out = tmp_path / "l0.json"
+    r = subprocess.run(
+        [sys.executable, str(SCRIPT), "--dir", str(corpus), "--json", str(out)],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+    )
+    assert r.returncode == 0, f"脚本失败：{r.stderr[-400:]}"
+    s = json.loads(out.read_text(encoding="utf-8"))["summary"]
+    assert s["tables"] == 2
+    assert s["tables_with_caption"] == 1, (
+        f"加粗标题应给紧邻的表补上 caption（切块层）；实际 {s['tables_with_caption']}"
+    )
+    assert s["tables_without_caption"] == 1
+    # 原始块长要能复核（2.0-51① 的配套要求）
+    detail = json.loads(out.read_text(encoding="utf-8"))["files_detail"]
+    assert all("lens_asc" in f for f in detail if not f.get("error"))

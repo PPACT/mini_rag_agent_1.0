@@ -37,12 +37,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import math
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from eval.l0_report import pct_nearest_rank  # noqa: E402
 from src.config.settings import get_settings  # noqa: E402
 from src.db.connection import close_pool  # noqa: E402
 from src.db.kb import KB_STRESS  # noqa: E402
@@ -75,18 +75,6 @@ def load_dataset(path: Path) -> list[dict]:
     return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
-def _pct_nearest_rank(vals: list[int], q: int) -> int:
-    """**nearest-rank** 分位。
-
-    ⚠️ **别用 `statistics.quantiles` 的默认 `exclusive` 方法** —— 小样本上它会**外推**，
-    实测在 2 个值的样本上算出 `p99 > max`（Excel 表格块常只有 2~4 个，正是小样本）。
-    """
-    v = sorted(vals)
-    if not v:
-        return 0
-    return v[min(len(v) - 1, max(0, math.ceil(q / 100 * len(v)) - 1))]
-
-
 def block_lengths() -> tuple[list[dict], list[int]]:
     """①② 逐文件块长（**只用表格块**）+ 汇总原始长度。纯 CPU，不需要 DB。"""
     s = get_settings()
@@ -97,7 +85,7 @@ def block_lengths() -> tuple[list[dict], list[int]]:
                 if c.kind == "table"]
         allv += lens
         rows.append({"file": name, "n": len(lens), "max": max(lens) if lens else 0,
-                     "p50": _pct_nearest_rank(lens, 50), "p90": _pct_nearest_rank(lens, 90),
+                     "p50": pct_nearest_rank(lens, 50), "p90": pct_nearest_rank(lens, 90),
                      "over": sum(1 for x in lens if x > 2 * s.chunk_size), "lens": sorted(lens)})
     return rows, allv
 
@@ -187,8 +175,8 @@ async def main() -> None:
         print(f"  {r['file'][:22]:<24}{r['n']:>5}{r['p50']:>7}{r['p90']:>7}{r['max']:>7}"
               f"{r['over']:>6}   {r['lens']}")
     over = sum(1 for x in allv if x > 2 * s.chunk_size)
-    print(f"  {'【7 篇合计】':<24}{len(allv):>5}{_pct_nearest_rank(allv, 50):>7}"
-          f"{_pct_nearest_rank(allv, 90):>7}{max(allv):>7}{over:>6}")
+    print(f"  {'【7 篇合计】':<24}{len(allv):>5}{pct_nearest_rank(allv, 50):>7}"
+          f"{pct_nearest_rank(allv, 90):>7}{max(allv):>7}{over:>6}")
     print(f"  超长块占比：{over}/{len(allv)} = {over / len(allv) * 100:.1f}%"
           f"  （⚠️ 本表块数很少，分位数本身不稳，**别过度解读 p90/p99**）\n")
 
@@ -225,8 +213,8 @@ async def main() -> None:
         out.write_text(json.dumps({
             "params": {"chunk_size": s.chunk_size, "overlap": s.chunk_overlap, "top": args.top},
             "blocks": rows, "blocks_total": {"n": len(allv), "over": over,
-                                             "p50": _pct_nearest_rank(allv, 50),
-                                             "p90": _pct_nearest_rank(allv, 90),
+                                             "p50": pct_nearest_rank(allv, 50),
+                                             "p90": pct_nearest_rank(allv, 90),
                                              "max": max(allv) if allv else 0},
             "modes": {name: {"summary": summarize(results[name]),
                              "ranks": results[name]} for name, _ in modes},

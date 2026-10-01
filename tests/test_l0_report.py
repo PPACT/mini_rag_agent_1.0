@@ -113,14 +113,14 @@ def test_pct_never_leaves_the_sample_range():
     实测给过 `p99 = 2932 > max = 2259`，以及把 `[192, 2259]` 的 p50 报成 **1225**
     （那是**两点的中点**，不是分位数）。这两个都是真踩过的数，所以直接拿来当用例。
     """
-    from eval.l0_report import _pct
+    from eval.l0_report import pct_nearest_rank
 
     for vals in ([192, 2259], [637, 851], [120, 213, 256, 933], [86, 219, 1406]):
         for q in (50, 90, 99):
-            v = _pct(vals, q)
+            v = pct_nearest_rank(vals, q)
             assert min(vals) <= v <= max(vals), f"{vals} 的 p{q} = {v} 超出样本区间"
     # 反向用例：旧口径在这里给 1225（中点）
-    assert _pct([192, 2259], 50) == 192, "nearest-rank 的 p50 应取到实际样本值 192"
+    assert pct_nearest_rank([192, 2259], 50) == 192, "nearest-rank 的 p50 应取到实际样本值 192"
 
 
 def test_caption_count_is_chunk_level(tmp_path):
@@ -162,3 +162,21 @@ def test_caption_count_is_chunk_level(tmp_path):
     # 原始块长要能复核（2.0-51① 的配套要求）
     detail = json.loads(out.read_text(encoding="utf-8"))["files_detail"]
     assert all("lens_asc" in f for f in detail if not f.get("error"))
+
+
+def test_pct_has_a_single_source():
+    """`2.0-51③`：分位实现**只能有一份** —— 评测脚本必须 import，不许各写一份。
+
+    两份实现现在一致，但**两份就是"同一事实两个来源"**，而漂移是**静默**的
+    （本项目已因同类事故吃过两次：`upload_api._ALLOWED` 的两份清单 /
+    `parse_plain` 的两处扩展名判断）。
+
+    ⚠️ 断言用 `is`（**同一个函数对象**），不是"结果相等" ——
+    有人**复制一份算法一样**的实现，这条也必须红。
+    """
+    import eval.run_excel_numeric_eval as ev
+    from eval.l0_report import pct_nearest_rank
+
+    assert ev.pct_nearest_rank is pct_nearest_rank, (
+        "评测脚本必须 import L0 那份分位实现，不许自带一份"
+    )

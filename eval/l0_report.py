@@ -45,7 +45,7 @@ TINY_CHARS = 50         # 低于 50 字符算"极短块"
 OUT_DEFAULT = ROOT / "logs" / "l0_report.json"
 
 
-def _pct(vals: list[int], q: float) -> int:
+def pct_nearest_rank(vals: list[int], q: float) -> int:
     """**nearest-rank** 分位（`2.0-51①`）。
 
     ⚠️ **别改回 `statistics.quantiles`** —— 它的默认 `exclusive` 方法在**小样本上会外推**，
@@ -95,8 +95,8 @@ def _measure(path: Path, chunk_size: int, overlap: int) -> dict:
         warnings=list(doc.warnings),
         blocks=doc.kind_counts(),
         n_chunks=len(chunks),
-        lens_p50=_pct(lens, 50), lens_p90=_pct(lens, 90),
-        lens_p99=_pct(lens, 99), lens_max=max(lens) if lens else 0,
+        lens_p50=pct_nearest_rank(lens, 50), lens_p90=pct_nearest_rank(lens, 90),
+        lens_p99=pct_nearest_rank(lens, 99), lens_max=max(lens) if lens else 0,
         n_long=sum(1 for x in lens if x > chunk_size * LONG_RATIO),
         n_tiny=sum(1 for x in lens if x < TINY_CHARS),
         n_empty=sum(1 for x in lens if x == 0),

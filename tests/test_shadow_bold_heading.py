@@ -6,8 +6,9 @@
 一旦将来有人加了一条"长度闸"把误认挡住了，`test_known_failure_mode...` 会红 ——
 **那时候要连带更新口径**，而不是让它悄悄改变行为。
 
-⚠️ 另一条同样重要：**默认路径一字未改**。`parse_docx(path)` 不传 `heading_rule`
-必须仍是**现判据**（只认样式名）—— 否则"先 shadow 再决定"就成了空话。
+⚠️ 另一条同样重要：**开关必须仍然可切回去**。`2.0-48` 开启后
+`parse_docx(path)` 的默认已是新判据，但**显式传 `_is_heading` 必须仍能得到旧行为** ——
+否则 `eval/shadow_bold_heading.py` 的 A/B 台子第二天就失效了（两边同判据、差值恒为 0）。
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 from eval.shadow_bold_heading import _looks_like_title  # noqa: E402
 from src.document_parser.parsers import (  # noqa: E402
+    _is_heading,
     heading_rule_style_or_bold,
     parse_docx,
 )
@@ -60,24 +62,49 @@ def _docx(tmp: Path, name: str = "a.docx", *, bold_title: str | None = None,
     return path
 
 
-def _kind_of(path: Path, rule) -> dict[str, str]:
-    """`{段落文本: kind}` —— 便于按文本断言。"""
-    return {b.text: b.kind for b in parse_docx(str(path), heading_rule=rule).blocks}
+_UNSET = object()
+
+
+def _kind_of(path: Path, rule=_UNSET) -> dict[str, str]:
+    """`{段落文本: kind}` —— 便于按文本断言。
+
+    ⚠️ **不传 `rule` = 走生产默认**（不显式传参）—— 这样"默认变没变"本身也是被测的。
+    """
+    kw = {} if rule is _UNSET else {"heading_rule": rule}
+    return {b.text: b.kind for b in parse_docx(str(path), **kw).blocks}
 
 
 # ---------------------------------------------------------------- 判据本体
 
 
-def test_default_rule_unchanged(tmp_path):
-    """⭐ **零行为变更**：不传 `heading_rule` = 现判据 —— 加粗标题**仍**是 paragraph。
+def test_default_rule_is_the_new_one(tmp_path):
+    """⭐ `2.0-48` 已开启：`parse_docx` **默认**就认加粗（`交流区 §1.42②`）。"""
+    path = _docx(tmp_path, bold_title="三、成本与费用")
+    kinds = _kind_of(path)
+    assert kinds.get("三、成本与费用") == "heading", "默认应已是新判据（样式 OR 加粗）"
 
-    这条一红，就说明"先 shadow 再决定"的承诺破了（生产行为被悄悄改了）。
+
+def test_old_rule_still_available(tmp_path):
+    """⭐ **开关仍能切回旧判据** —— 显式传 `_is_heading` 时，加粗标题**仍**是 paragraph。
+
+    这条是 `eval/shadow_bold_heading.py` **A/B 台子的地基**：
+    一红就说明台子两边变成同一个判据了（差值恒为 0，验不出任何东西）。
     """
     path = _docx(tmp_path, bold_title="三、成本与费用")
-    kinds = _kind_of(path, None)
+    kinds = _kind_of(path, _is_heading)
     assert kinds.get("三、成本与费用") == "paragraph", (
-        "默认路径不该认加粗 —— 现判据只认样式名"
+        "显式传旧判据时必须退回只认样式名 —— 否则 A/B 台子失效"
     )
+
+
+def test_production_entry_uses_new_rule(tmp_path):
+    """⭐ **验收本体**：生产入口 `parse_document`（不是 `parse_docx`）也得认加粗。
+
+    只测 `parse_docx` 不够 —— 接线断在 `routing` 那一层的话，上面几条**照样绿**。
+    """
+    path = _docx(tmp_path, bold_title="三、成本与费用")
+    kinds = {b.text: b.kind for b in parse_document(str(path)).blocks}
+    assert kinds.get("三、成本与费用") == "heading", "生产入口没接上新判据"
 
 
 def test_bold_headings_are_recognized_under_new_rule(tmp_path):
@@ -146,14 +173,15 @@ def test_bold_title_before_table_gains_caption(tmp_path):
     assert captioned[0].title == "三、成本与费用"
 
 
-def test_baseline_has_no_caption(tmp_path):
-    """对照组：现判据下同一文件**没有** caption —— 证明上一条的改变来自判据本身。"""
+def test_old_rule_has_no_caption(tmp_path):
+    """对照组：**旧判据**下同一文件没有 caption —— 证明上一条的改变来自判据本身。"""
     from src.config.settings import get_settings
     from src.document_parser.chunking import split_blocks
 
     s = get_settings()
     path = _docx(tmp_path, bold_title="三、成本与费用")
-    base = split_blocks(parse_docx(str(path)), s.chunk_size, s.chunk_overlap)
+    base = split_blocks(parse_docx(str(path), heading_rule=_is_heading),
+                        s.chunk_size, s.chunk_overlap)
     assert not any(c.text.startswith("表「") for c in base)
 
 

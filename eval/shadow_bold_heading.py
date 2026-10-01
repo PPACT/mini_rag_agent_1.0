@@ -1,4 +1,4 @@
-"""`2.0-48` **shadow** —— 新判据「整段加粗」会改到什么？（**不改行为 / 零成本 / 不重嵌**）
+"""`2.0-48` **shadow** —— 新判据「整段加粗」相对旧判据改到了什么？（**只读 / 零成本 / 不重嵌**）
 
 ## 为什么先 shadow（文档侧 `交流区 §1.40②`）
 
@@ -13,14 +13,17 @@
 | ② | ⭐ **`content` 会变多少个块** | **这才是重嵌成本** |
 | ③ | **认了多少 / 其中多少真像标题** | 判据的区分度 |
 
-## 它怎么做到"不改行为"
+## 它的 A/B 是哪两条路（`2.0-48` 开启后已翻面）
 
-**同一个判据实现，两条路**（`parsers.heading_rule_style_or_bold`，一处定义）：
+**同一个判据实现，一处定义**（`parsers.heading_rule_style_or_bold`）：
 
-- **基线**：`routing.parse_document(path)` —— **真·生产入口**（P-2：核实实际生效的路径）
-- **shadow**：`parsers.parse_docx(path, heading_rule=heading_rule_style_or_bold)`
+- **基线**：`parse_docx(path, heading_rule=_is_heading)` —— **旧判据**（只认样式名）
+  ⚠️ 必须**显式**传：`parse_docx` 的默认**已经切成新判据**了，不传就两边一样、差值恒为 0
+- **shadow**：`parse_docx(path, heading_rule=heading_rule_style_or_bold)` —— **生产现口径**
+- ⭐ **自检**：生产入口 `routing.parse_document(path)` 必须与 shadow 那条链**逐块相同**
+  （P-2：核实"打算用的"＝"实际生效的"）
 
-`parse_docx` 的 `heading_rule` 默认 `None` = 现行为 → **生产链路一字未动**。
+→ 三个数因此是 **"旧判据 → 新判据"的差**，与开启前跑出来的那一轮**可直接对照**。
 
 ## ⚠️ 两条口径说明（别把数读错）
 
@@ -49,6 +52,7 @@ sys.path.insert(0, str(ROOT))
 from src.config.settings import get_settings  # noqa: E402
 from src.document_parser.chunking import split_blocks  # noqa: E402
 from src.document_parser.parsers import (  # noqa: E402
+    _is_heading,
     heading_rule_style_or_bold,
     parse_docx,
 )
@@ -80,15 +84,17 @@ def _looks_like_title(text: str) -> bool:
 def _measure(path: Path, chunk_size: int, overlap: int) -> dict:
     rec: dict = {"file": path.name}
     try:
-        base_doc = parse_document(str(path))                       # 真·生产入口
-        # ⚠️ shadow 必须**走同一条后处理** —— `parse_document` = 路由 → 解析器 → `recover_tables`。
-        # 少了 `recover_tables`，伪表格会被当成普通段落 → AB 两组**差了两个变量**（P-9）。
+        # `2.0-48` 开启后，`parse_docx` 的**默认已是新判据** →
+        # 基线必须**显式**传旧判据，否则两边同为新判据、差值恒为 0（台子就白跑了）。
+        base_doc, _ = recover_tables(parse_docx(str(path), heading_rule=_is_heading))
+        # shadow = 生产现口径。⚠️ 必须**走同一条后处理** ——
+        # `parse_document` = 路由 → 解析器 → `recover_tables`；少了 `recover_tables`，
+        # 伪表格会被当成普通段落 → AB 两组**差了两个变量**（P-9）。
         shadow_doc, _ = recover_tables(
             parse_docx(str(path), heading_rule=heading_rule_style_or_bold))
-        # ⭐ 自检：把"现判据 + 同一后处理"复算一遍，必须与生产基线**逐块相同**。
-        # 不等 = 这套 AB 台子本身失真，数字一律不可信（实测踩过：漏了 recover_tables）。
-        replay, _ = recover_tables(parse_docx(str(path)))
-        rec["harness_ok"] = _same_blocks(replay, base_doc)
+        # ⭐ 自检：生产入口必须与 shadow 那条链**逐块相同** ——
+        # 不等 = 台子测的不是实际跑的径，数字一律不可信（实测踩过：漏了 recover_tables）。
+        rec["harness_ok"] = _same_blocks(shadow_doc, parse_document(str(path)))
         base_chunks = split_blocks(base_doc, chunk_size, overlap)
         shadow_chunks = split_blocks(shadow_doc, chunk_size, overlap)
     except Exception as e:  # noqa: BLE001
@@ -142,9 +148,9 @@ def main() -> int:
     recs = [_measure(p, s.chunk_size, s.chunk_overlap) for p in files]
     ok = [r for r in recs if not r.get("error")]
 
-    print(f"2.0-48 shadow ｜ 判据=样式标题 OR 整段加粗 ｜ {src_dir}")
+    print(f"2.0-48 shadow ｜ A/B = 旧判据(只认样式) → 生产现判据(样式 OR 整段加粗) ｜ {src_dir}")
     print(f"参数：chunk_size={s.chunk_size}  overlap={s.chunk_overlap} ｜ "
-          f"⚠️ **不改行为**：生产链路仍走 parse_document（现判据）\n")
+          f"⚠️ 只读不写：本脚本不嵌入、不改库\n")
 
     print(f"{'文件':<34}{'heading 前→后':>14}{'新认':>6}{'像标题':>7}"
           f"{'块 前→后':>12}{'新增块':>7}{'删除块':>7}{'章节标题 前→后':>15}")
@@ -179,8 +185,8 @@ def main() -> int:
               f"{', '.join(bad_harness[:4])}")
         print("      → 上面所有数字**不可信**（多半是 shadow 少了某道后处理）")
     else:
-        print(f"\n  ✅ AB 台子自检通过：{len(ok)}/{len(ok)} 篇的「现判据 + 同一后处理」"
-              f"与 `parse_document` 逐块一致")
+        print(f"\n  ✅ AB 台子自检通过：{len(ok)}/{len(ok)} 篇的**生产现判据那条链**"
+              f"与 `parse_document` 逐块一致（台子测的确实是实际跑的径）")
 
     print("\n【新增的标题（全量）】")
     for r in ok:

@@ -147,19 +147,24 @@ def _is_heading_bold(paragraph) -> bool:
 
 
 def heading_rule_style_or_bold(paragraph) -> bool:
-    """`2.0-48` 的**新判据**：样式标题 **或** 整段加粗。
+    """`2.0-48` 的判据（**已是 `parse_docx` 的默认**）＝ 样式标题 **或** 整段加粗。
 
-    ⚠️ **为什么要 `or` 上样式判据**：现判据（`Heading`/`标题` 样式名）是 ✅ 事实、
+    ⚠️ **为什么要 `or` 上样式判据**：旧判据（`Heading`/`标题` 样式名）是 ✅ 事实、
     已经在用，**不能被顶掉** —— 否则语料里那 5 个样式标题会**倒退**。
     裁定里"不写 OR"指的是**不 OR 字号**，不是不 OR 已认定的事实（`交流区 §1.40①`）。
 
-    这是**唯一的开关**：`parse_docx(heading_rule=...)` 与 `shadow` 探针共用它，
-    将来真正开启时也只改这里（避免"同一事实两个来源"）。
+    ⚠️ **这是唯一一处判据实现**：`parse_docx` 的默认、`shadow` 探针、测试**共用它**
+    （避免"同一事实两个来源"→ 静默漂移）。
+
+    📌 `交流区 §1.42②` 裁定 **开** —— 依据：`shadow` 实测**重嵌只 6 块**
+    （能碰到 `content` 的只有"给紧邻标题的表格补 caption"一条路），
+    而 `title` 只进 `title` 列、`content_tsv` 不算它 → **章节变多是纯增益**。
     """
     return _is_heading(paragraph) or _is_heading_bold(paragraph)
 
 
-def parse_docx(path: str, heading_rule: Callable[[object], bool] | None = None) -> ParsedDoc:
+def parse_docx(path: str,
+               heading_rule: Callable[[object], bool] = heading_rule_style_or_bold) -> ParsedDoc:
     """Word（python-docx）。**含表格**，段落与表格按文档顺序排列。
 
     ⚠️ Word 没有稳定页码概念（分页由渲染决定）→ `page` 一律为 `None`。
@@ -170,12 +175,13 @@ def parse_docx(path: str, heading_rule: Callable[[object], bool] | None = None) 
     → 它是**每一篇** docx 都成立的事实，不是"这一篇有问题"；
       塞进 `warnings` 会让那一列失去区分度（实测 21/21 个文件都 ≥1 条警告）。
 
-    ⚠️ `heading_rule=None` = **现行为**（只认样式名）；传 `heading_rule_style_or_bold`
-    即 `2.0-48` 的候选判据。**默认不变 = 零行为变更**，`shadow` 靠它做 A/B。
+    ⚠️ `heading_rule` **默认 = `heading_rule_style_or_bold`**（`2.0-48` 开启后，
+    `交流区 §1.42`）。要复现**旧行为**（只认样式名）需**显式**传 `_is_heading` ——
+    `shadow` 探针正是靠这一对做 A/B（`eval/shadow_bold_heading.py`）。
     """
     import docx
 
-    is_head = heading_rule or _is_heading
+    is_head = heading_rule
     doc = docx.Document(path)
     blocks: list[Block] = []
     tables = 0

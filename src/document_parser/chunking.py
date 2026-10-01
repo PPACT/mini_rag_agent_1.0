@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 from src.document_parser.blocks import Block, ParsedDoc
 from src.document_parser.semantic_splitter import split_text
+from src.document_parser.tables import with_caption
 
 # 整块不切的类型
 _ATOMIC = ("table", "code")
@@ -76,13 +77,54 @@ def _segments(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
     return out
 
 
+def _merge_heading_captions(segs: list[tuple[str, list[Block]]]) -> list[tuple[str, list[Block]]]:
+    """`2.0-46`：把「**只含 heading 的 text 段** + 紧随的 table 段」合成一组，heading 作 caption。
+
+    ⚠️ **为什么落点在这里、不在解析层**（文档侧 §1.37②，我认同）：
+    heading 同时是**章节标记** —— `split_blocks` 靠它维护 `heading` 变量、喂给后续块的 `title`。
+    在解析层把它"吞成 caption"会**丢掉层级**。这里合并的只是**段的组合方式**：
+    IR 不变，且合并后 `heading` 变量**照常更新**（见 `split_blocks` 里的 `heading = cap.text`）。
+
+    **判据（结构性，不是猜）**：
+
+        heading 紧邻（块序号差 1）且下一块是 table  →  合并
+        中间夹了任何块（段落 / 另一个 heading）      →  不合并
+
+    ⚠️ **宁可漏判** —— 漏判只是多一个碎块；**误判是把章节标题错当成 caption**（污染表格语义）。
+    """
+    out: list[tuple[str, list[Block]]] = []
+    i = 0
+    while i < len(segs):
+        kind, group = segs[i]
+        if (kind == "text" and len(group) == 1 and group[0].kind == "heading"
+                and i + 1 < len(segs) and segs[i + 1][0] == "table"):
+            out.append(("table_captioned", [group[0], *segs[i + 1][1]]))
+            i += 2
+            continue
+        out.append((kind, group))
+        i += 1
+    return out
+
+
 def split_blocks(parsed: ParsedDoc, chunk_size: int = 512,
                  overlap: int = 64) -> list[ChunkCandidate]:
     """按块类型切块（本文件是它的说明书，见模块 docstring）。"""
     out: list[ChunkCandidate] = []
     heading: str | None = None      # 跨段跟踪的"当前章节"
 
-    for kind, group in _segments(parsed.blocks):
+    for kind, group in _merge_heading_captions(_segments(parsed.blocks)):
+        if kind == "table_captioned":
+            # `2.0-46`：紧邻 heading 的表格 → heading 既作 caption、**也仍是章节标记**
+            cap, tb = group[0], group[1]
+            out.append(ChunkCandidate(
+                text=with_caption(tb.text, cap.text),
+                start=0, end=len(tb.text), title=cap.text,
+                page=tb.page, raw_table=tb.raw_table,
+                table_complex=tb.table_complex, kind="table",
+            ))
+            heading = cap.text      # ⚠️ **层级不丢**：被吞的 heading 仍喂给后续块
+            continue
+
         if kind != "text":
             b = group[0]
             out.append(ChunkCandidate(

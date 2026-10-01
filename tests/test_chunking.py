@@ -116,3 +116,52 @@ def test_offsets_are_relative_to_the_segment():
 
 def test_empty_document_yields_nothing():
     assert split_blocks(_doc()) == []
+
+
+# ---- 2.0-46：紧邻 heading 的表格，heading 作 caption ----
+
+
+def test_heading_before_table_becomes_caption():
+    """`2.0-46`：**紧邻**（块序号差 1）的 heading + table → heading 作 caption，不再单独成块。"""
+    chunks = split_blocks(_doc(
+        Block(kind="heading", text="二、收入结构"),
+        _table("表：业务板块=智能硬件；Q3 收入（万元）=12600",
+               "| 业务板块 | Q3 收入 |\n| --- | --- |\n| 智能硬件 | 12600 |"),
+    ))
+    assert len(chunks) == 1, "heading 不该再单独成块（那是废块）"
+    assert chunks[0].kind == "table"
+    assert "表「二、收入结构」：" in chunks[0].text, "heading 要变成表格的 caption"
+    assert chunks[0].title == "二、收入结构"
+
+
+def test_caption_does_not_break_hierarchy():
+    """⚠️ **关键**：Caption 化的 heading **仍然是章节标记** —— 后续块要能继承它。
+
+    这正是"落点放切块层、不放解析层"的理由（文档侧 §1.37②）：
+    在解析层吞掉 heading 会**丢层级**。
+    """
+    chunks = split_blocks(_doc(
+        Block(kind="heading", text="二、收入结构"),
+        _table("表：a=1", "| a |\n| --- |\n| 1 |"),
+        _para("上表说明收入结构。"),
+    ))
+    after = [c for c in chunks if "上表说明收入结构" in c.text]
+    assert after and after[0].title == "二、收入结构", "被吞的 heading 仍要喂给后续块"
+
+
+def test_paragraph_between_heading_and_table_blocks_the_merge():
+    """**中间夹了任何块 → 不合并**（判据是结构性的、且**宁可漏判**）。"""
+    chunks = split_blocks(_doc(
+        Block(kind="heading", text="二、收入结构"),
+        _para("先说明一句。"),
+        _table("表：a=1", "| a |\n| --- |\n| 1 |"),
+    ))
+    table = [c for c in chunks if c.kind == "table"][0]
+    assert "表「" not in table.text, "中间夹了段落 → 不该把标题当 caption（误判会污染表格语义）"
+
+
+def test_plain_paragraph_before_table_is_not_a_caption():
+    """**普通段落**紧邻表格 → **不合并**（只有 heading 才算 caption）。"""
+    chunks = split_blocks(_doc(_para("这是一句正文。"),
+                               _table("表：a=1", "| a |\n| --- |\n| 1 |")))
+    assert "表「" not in [c for c in chunks if c.kind == "table"][0].text

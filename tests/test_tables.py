@@ -13,6 +13,7 @@ from src.document_parser.tables import (
     number_tokens,
     render_nl,
     rows_to_markdown,
+    with_caption,
 )
 
 REIMBURSE = [
@@ -141,6 +142,33 @@ def test_render_single_row_table_is_not_lost():
 
 def test_render_empty():
     assert render_nl([]) == ""
+
+
+# ---- 2.0-46：with_caption（前缀约定）----
+
+
+def test_with_caption_replaces_the_prefix():
+    """`with_caption` 靠"**换前缀**"实现（不重跑渲染）→ 本测试**钉住前缀约定**。
+
+    ⚠️ 这条是关键：`with_caption` 与 `render_nl` **必须一起改** ——
+    `render_nl` 换了前缀而这里没换，caption 就会**静默失效**（表格照常渲染、标题不见了）。
+    """
+    nl = render_nl(REIMBURSE)                      # 不带 caption → 前缀是 "表："
+    assert nl.startswith("表：")
+    capped = with_caption(nl, "差旅标准")
+    assert capped.startswith("表「差旅标准」：")
+    assert capped[len("表「差旅标准」："):] == nl[len("表："):], "除前缀外内容必须逐字一致"
+
+
+def test_with_caption_tolerates_no_caption():
+    nl = render_nl(REIMBURSE)
+    assert with_caption(nl, None) == nl
+    assert with_caption(nl, "") == nl
+
+
+def test_render_nl_with_caption_matches_with_caption():
+    """两条路径必须等价：直接 `render_nl(caption=)` ≡ `with_caption(render_nl())`。"""
+    assert render_nl(REIMBURSE, caption="差旅标准") == with_caption(render_nl(REIMBURSE), "差旅标准")
 
 
 # ---- 原表 Markdown ----

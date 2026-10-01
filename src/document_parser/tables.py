@@ -121,6 +121,26 @@ def rows_to_markdown(rows: list[list[str]], header: bool = True) -> str:
     return "\n".join(out)
 
 
+_NL_PREFIX = "表："
+_NL_PREFIX_CAP = "表「"
+
+
+def with_caption(nl_text: str, caption: str | None) -> str:
+    """把**已经渲染好的**自然语言版换上 caption（`2.0-46`）。
+
+    ⚠️ 为什么不重新渲染一遍：渲染需要**原始 rows**，而 `Block` 只存了
+    `text`（自然语言版）+ `raw_table`（Markdown）—— 从 Markdown 反解 rows 是多余的往返。
+    而 caption 在这套格式里**只是前缀**（`表：…` → `表「X」：…`），换前缀是等价且无歧义的。
+
+    ⚠️ **代价**：本函数依赖 `render_nl` 的前缀约定 —— 所以它俩**必须住在一起**，
+    改前缀时两处一起改。`tests/test_tables.py` 有测试钉住这个约定（改一处就会红）。
+    """
+    if not caption:
+        return nl_text
+    body = nl_text[len(_NL_PREFIX):] if nl_text.startswith(_NL_PREFIX) else nl_text
+    return f"{_NL_PREFIX_CAP}{caption}」：{body}"
+
+
 def render_nl(rows: list[list[str]], caption: str | None = None) -> str:
     """把表格渲染成**自然语言版**（`chunks.content` 里表格那部分）。
 

@@ -28,6 +28,11 @@ MANIFEST = SYNTH_DIR / "_manifest.json"
 COMPANY_SCOPE = "公司"     # 基础文档与通用文档：全员可见
 EVAL_SECRET_LEVEL = 3
 
+# 认识的扩展名。默认那两个目录里只有 .md/.txt，所以**加长这份清单不改变默认行为**；
+# 它存在的意义是 `--dir docs/corpus` 时能收真实语料（pdf/docx/xlsx/...）。
+# ⚠️ `.html` 会**显式失败**（`2.0-40` 未接入）—— 这不藏，让它进失败清单。
+_SUFFIXES = (".md", ".txt", ".pdf", ".docx", ".xlsx", ".pptx", ".csv", ".py", ".html")
+
 
 def _load_manifest() -> dict[str, str]:
     """读取「部门变体文件 → 所属部门」映射（由 gen_synth.py 生成）。"""
@@ -46,35 +51,44 @@ def doc_id_for(filename: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"eval:{filename}"))
 
 
-def collect_files(exclude_dept: bool) -> list[Path]:
-    """收集语料文件。exclude_dept=True 时剔除部门变体（得到「干净语料」）。"""
+def collect_files(exclude_dept: bool, dirs: list[Path] | None = None) -> list[Path]:
+    """收集语料文件。`exclude_dept=True` 时剔除部门变体（得到「干净语料」）。
+
+    `dirs` 不给 = 默认那两份合成语料目录（**行为不变**）；
+    给了就用它 —— 例如 `--dir docs/corpus` 灌真实语料（`2.0-47`）。
+    """
     files: list[Path] = []
-    for d in (CORPUS_DIR, SYNTH_DIR):
+    for d in (dirs if dirs is not None else [CORPUS_DIR, SYNTH_DIR]):
         if d.exists():
-            files.extend(sorted(p for p in d.glob("*") if p.suffix.lower() in (".md", ".txt")))
+            files.extend(sorted(p for p in d.glob("*") if p.suffix.lower() in _SUFFIXES))
     if exclude_dept:
         # 只剔除"部门变体"（文件名以 dept 开头），保留 LLM 生成的不同主题文档
         files = [p for p in files if not p.name.startswith("dept")]
     return files
 
 
-async def truncate() -> None:
+async def truncate(kb: str = KB_STRESS) -> None:
     """清空评测数据（documents / chunks）。"""
-    pool = await get_pool(KB_STRESS)
+    pool = await get_pool(kb)
     await pool.execute("TRUNCATE documents, chunks CASCADE")
 
 
-async def ingest(exclude_dept: bool = False) -> int:
-    """灌入语料，返回切片总数。供 CLI 与评测脚本复用。"""
+async def ingest(exclude_dept: bool = False, dirs: list[Path] | None = None,
+                 kb: str = KB_STRESS) -> int:
+    """灌入语料，返回切片总数。供 CLI 与评测脚本复用。
+
+    ⚠️ `dirs` / `kb` 都有默认值 —— **不传就是原来的行为**（合成语料 → 压测库）。
+    """
     settings = get_settings()
-    pool = await get_pool(KB_STRESS)
-    store = get_vector_store(KB_STRESS)
+    pool = await get_pool(kb)
+    store = get_vector_store(kb)
     embedding = get_embedding()
 
-    files = collect_files(exclude_dept)
+    files = collect_files(exclude_dept, dirs)
     manifest = _load_manifest()
-    print(f"发现 {len(files)} 篇语料{'（已剔除部门变体）' if exclude_dept else '（基础 + 合成）'}"
-          f"，清单条目 {len(manifest)}")
+    src_desc = ("目录 " + ", ".join(str(d) for d in dirs)) if dirs is not None else "默认（基础 + 合成）"
+    print(f"发现 {len(files)} 篇语料（{src_desc}"
+          f"{'，已剔除部门变体' if exclude_dept else ''}），kb={kb}，清单条目 {len(manifest)}")
 
     total_chunks = 0
     scope_count: dict[str, int] = {}
@@ -164,12 +178,16 @@ async def main() -> None:
     parser.add_argument("--exclude-dept", action="store_true",
                         help="不灌部门变体（得到「干净语料」，用于日常集评估）")
     parser.add_argument("--truncate", action="store_true", help="灌之前先清空")
+    parser.add_argument("--dir", action="append", default=None,
+                        help="语料目录（可重复）。不给 = 默认那两份合成语料目录")
+    parser.add_argument("--kb", default=KB_STRESS, help=f"目标库（默认 {KB_STRESS}）")
     args = parser.parse_args()
 
+    dirs = [Path(d) for d in args.dir] if args.dir else None
     if args.truncate:
-        await truncate()
-        print("已清空旧数据")
-    await ingest(args.exclude_dept)
+        await truncate(args.kb)
+        print(f"已清空旧数据（kb={args.kb}）")
+    await ingest(args.exclude_dept, dirs, args.kb)
     await close_pool()
 
 

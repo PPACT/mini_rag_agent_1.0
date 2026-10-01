@@ -1,0 +1,9 @@
+{"id": 9001, "kind": "excel_numeric", "question": "客户服务 SLA 里，P1 致命故障的解决时限是多久？", "source": "11_客户服务响应标准SLA.xlsx", "answer_spans": ["故障等级=P1 致命", "首次响应=30 分钟；解决时限=4 小时"], "type": "doc_agent"}
+{"id": 9002, "kind": "excel_numeric", "question": "固定资产里，电子设备的折旧年限是几年？", "source": "12_固定资产管理办法.xlsx", "answer_spans": ["资产类别=电子设备；折旧年限（年）=3"], "type": "doc_agent"}
+{"id": 9003, "kind": "excel_numeric", "question": "2025 年各部门预算里，哪个部门最高？金额多少？", "source": "21_费用预算明细_2025.xlsx", "answer_spans": ["部门=销售部；2025年上半年=120；列3=140；2025年下半年=160；列5=180；全年合计=600"], "type": "doc_agent"}
+{"id": 9004, "kind": "excel_numeric", "question": "2025 年第三季度，智能硬件加软件与平台的收入合计是多少？", "source": "21_费用预算明细_2025.xlsx", "answer_spans": ["业务板块=智能硬件；期间=2025Q3；收入（万元）=12600", "业务板块=软件与平台；期间=2025Q3；收入（万元）=9350"], "type": "doc_agent"}
+{"id": 9005, "kind": "excel_numeric", "question": "IT 资产台账里，原值最高的那一项是什么？", "source": "18_IT资产台账_2025Q3.xlsx", "answer_spans": ["资产名称=服务器；品牌型号=浪潮 NF5280M6", "原值（元）=128000"], "type": "doc_agent"}
+{"id": 9006, "kind": "excel_numeric", "question": "2025 年度培训计划里，预算最高的项目是哪个？多少钱？", "source": "16_2025年度培训计划.xlsx", "answer_spans": ["新员工入职培训=领导力工作坊", "42000=128000"], "type": "doc_agent"}
+{"id": 9007, "kind": "excel_numeric", "question": "研发部 2025 年全年预算合计是多少？", "source": "21_费用预算明细_2025.xlsx", "answer_spans": ["部门=研发部；2025年上半年=70；列3=80；2025年下半年=95；列5=105；全年合计=350"], "type": "doc_agent"}
+{"id": 9008, "kind": "excel_numeric", "question": "公司员工总数是多少？其中研发人员多少？", "source": "20_公司简介与组织架构.xlsx", "answer_spans": ["编制人数=486", "部门=研发部；负责人岗位=研发部负责人；主要职能=产品研发、技术支持；编制人数=171"], "type": "doc_agent"}
+{"id": 9009, "kind": "excel_numeric", "question": "专属级客户的年服务费按合同额的百分之几收？", "source": "11_客户服务响应标准SLA.xlsx", "answer_spans": ["等级=专属级；适用客户=年采购额 500 万元以上；年服务费（元）=合同额 8%"], "type": "doc_agent"}

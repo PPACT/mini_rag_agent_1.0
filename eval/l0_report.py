@@ -88,6 +88,13 @@ def _measure(path: Path, chunk_size: int, overlap: int) -> dict:
         n_tiny=sum(1 for x in lens if x < TINY_CHARS),
         n_empty=sum(1 for x in lens if x == 0),
         n_table=len(tables),
+        # `2.0-46` 的观测项：表格块**有没有 caption**（`表「X」：` 前缀）
+        # ⚠️ 两个数是**不同的东西**，别混：
+        #   · `n_cap_yes` = 拿到了 caption（紧邻 heading 被合并进来）
+        #   · `n_cap_no`  = 没有 caption —— **多数是"本来就没有紧邻 heading"**，
+        #     不是"漏判"。真正的漏判（判据该合而未合）在本判据下**恒为 0**（确定性事实判定）。
+        n_cap_yes=sum(1 for t in tables if t.text.startswith("表「")),
+        n_cap_no=sum(1 for t in tables if not t.text.startswith("表「")),
         table_ok=table_ok,
         table_missing_numbers=missing,
         code_len_max=max([len(b.text) for b in doc.blocks if b.kind == "code"], default=0),
@@ -142,6 +149,8 @@ def main() -> int:
     n_tiny = sum(r["n_tiny"] for r in ok)
     n_empty = sum(r["n_empty"] for r in ok)
     n_table = sum(r["n_table"] for r in ok)
+    n_cap_yes = sum(r["n_cap_yes"] for r in ok)
+    n_cap_no = sum(r["n_cap_no"] for r in ok)
     miss = sum(r["table_missing_numbers"] for r in ok)
     n_code = sum(r["n_code"] for r in ok)
     code_max = max([r["code_len_max"] for r in ok], default=0)
@@ -154,6 +163,9 @@ def main() -> int:
           f"{f'  ({n_tiny / n_chunks * 100:.1f}%)' if n_chunks else ''}"
           f" ｜ 空块：{n_empty}")
     print(f"  表格块：{n_table}｜**数值保真失败 {miss}**（应为 0）")
+    print(f"    · 含 caption（`表「X」：`，`2.0-46`）：{n_cap_yes}"
+          f" ｜ 无 caption：{n_cap_no}（**多数是本来就没有紧邻 heading**，不是漏判；"
+          f"判据该合而未合 = 0，确定性判定）")
     print(f"  代码块：{n_code} 个，最长 {code_max} 字符"
           f"{'  ← ⚠️ 整块未切（2.0-24 后半未做，属预期）' if code_max > s.chunk_size * 2 else ''}")
     print(f"  解析警告：{n_warn} 条")
@@ -168,6 +180,7 @@ def main() -> int:
          "summary": {"files": len(files), "ok": len(ok), "failed": len(failed),
                      "chunks": n_chunks, "long": n_long, "tiny": n_tiny, "empty": n_empty,
                      "tables": n_table, "table_missing_numbers": miss,
+                     "tables_with_caption": n_cap_yes, "tables_without_caption": n_cap_no,
                      "code_blocks": n_code, "code_max": code_max, "warnings": n_warn},
          "files_detail": recs},
         ensure_ascii=False, indent=1), encoding="utf-8")

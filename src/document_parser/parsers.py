@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from src.document_parser.blocks import Block, ParsedDoc
@@ -129,7 +130,36 @@ def _is_heading(paragraph) -> bool:
     return name.startswith("Heading") or name.startswith("标题")
 
 
-def parse_docx(path: str) -> ParsedDoc:
+def _is_heading_bold(paragraph) -> bool:
+    """`2.0-48` 候选判据：**整段显式加粗**（`run.bold is True`）。
+
+    ⚠️ **口径**（文档侧 `交流区 §1.40` 裁定）：
+      · ✅ 只认 `run.bold` —— **显式布尔属性**，文档里直接写着
+      · ⛔ **不认字号**：那要靠"正文基准"，而基准是**统计推断**，随语料变
+      · ⛔ **不写 `OR`**（既然两信号共线，就没理由把推断引进来）
+
+    ⚠️ **已知失败模式**：**整段加粗的强调句会被误认成标题** ——
+    这是本判据的固有代价。`2.0-48` 先 `shadow` 就是为了拿数字决定要不要接受它，
+    而**不是**假装它不存在（反向用例见 `tests/test_shadow_bold_heading.py`）。
+    """
+    runs = [r for r in paragraph.runs if (r.text or "").strip()]
+    return bool(runs) and all(r.bold is True for r in runs)
+
+
+def heading_rule_style_or_bold(paragraph) -> bool:
+    """`2.0-48` 的**新判据**：样式标题 **或** 整段加粗。
+
+    ⚠️ **为什么要 `or` 上样式判据**：现判据（`Heading`/`标题` 样式名）是 ✅ 事实、
+    已经在用，**不能被顶掉** —— 否则语料里那 5 个样式标题会**倒退**。
+    裁定里"不写 OR"指的是**不 OR 字号**，不是不 OR 已认定的事实（`交流区 §1.40①`）。
+
+    这是**唯一的开关**：`parse_docx(heading_rule=...)` 与 `shadow` 探针共用它，
+    将来真正开启时也只改这里（避免"同一事实两个来源"）。
+    """
+    return _is_heading(paragraph) or _is_heading_bold(paragraph)
+
+
+def parse_docx(path: str, heading_rule: Callable[[object], bool] | None = None) -> ParsedDoc:
     """Word（python-docx）。**含表格**，段落与表格按文档顺序排列。
 
     ⚠️ Word 没有稳定页码概念（分页由渲染决定）→ `page` 一律为 `None`。
@@ -139,9 +169,13 @@ def parse_docx(path: str) -> ParsedDoc:
     `python-docx` 不暴露**目录 / 页眉 / 页脚**，故这三处内容不参与解析。
     → 它是**每一篇** docx 都成立的事实，不是"这一篇有问题"；
       塞进 `warnings` 会让那一列失去区分度（实测 21/21 个文件都 ≥1 条警告）。
+
+    ⚠️ `heading_rule=None` = **现行为**（只认样式名）；传 `heading_rule_style_or_bold`
+    即 `2.0-48` 的候选判据。**默认不变 = 零行为变更**，`shadow` 靠它做 A/B。
     """
     import docx
 
+    is_head = heading_rule or _is_heading
     doc = docx.Document(path)
     blocks: list[Block] = []
     tables = 0
@@ -161,7 +195,7 @@ def parse_docx(path: str) -> ParsedDoc:
         else:
             text = (item.text or "").strip()
             if text:
-                blocks.append(Block(kind="heading" if _is_heading(item) else "paragraph",
+                blocks.append(Block(kind="heading" if is_head(item) else "paragraph",
                                     text=text))
     return ParsedDoc(blocks=blocks, parser="python-docx")
 

@@ -75,10 +75,15 @@ async def truncate(kb: str = KB_STRESS) -> None:
 
 
 async def ingest(exclude_dept: bool = False, dirs: list[Path] | None = None,
-                 kb: str = KB_STRESS) -> int:
+                 kb: str = KB_STRESS,
+                 failures_out: list[DocumentParseError] | None = None) -> int:
     """灌入语料，返回切片总数。供 CLI 与评测脚本复用。
 
-    ⚠️ `dirs` / `kb` 都有默认值 —— **不传就是原来的行为**（合成语料 → 压测库）。
+    ⚠️ `dirs` / `kb` / `failures_out` 都有默认值 —— **不传就是原来的行为**。
+
+    `failures_out`（`2.0-50` 加的）：失败清单本来是**只在函数内部打印**的，
+    调用方拿不到 —— 而 `2.0-50` 要的是"**哪一篇、什么原因**"。
+    ⚠️ 用法是**传一个 list 进来**（不是改返回值）—— 免得打断既有调用方。
     """
     settings = get_settings()
     pool = await get_pool(kb)
@@ -173,6 +178,8 @@ async def ingest(exclude_dept: bool = False, dirs: list[Path] | None = None,
     print(f"范围分布（前5）: {top}{' ...' if len(scope_count) > 5 else ''}")
 
     # 2.0-3：失败清单**一定要打出来**（以前只会在中途炸掉，看不到哪几篇坏了）
+    if failures_out is not None:
+        failures_out.extend(failures)
     if failures:
         print(f"\n⚠️ {len(failures)} 篇解析失败（已跳过，未入库）：")
         for err in failures[:20]:

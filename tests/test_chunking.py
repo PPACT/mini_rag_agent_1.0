@@ -165,3 +165,59 @@ def test_plain_paragraph_before_table_is_not_a_caption():
     chunks = split_blocks(_doc(_para("这是一句正文。"),
                                _table("表：a=1", "| a |\n| --- |\n| 1 |")))
     assert "表「" not in [c for c in chunks if c.kind == "table"][0].text
+
+
+# ---------------------------------------------------------------- 2.0-31
+
+
+def test_new_kind_must_be_atomic():
+    """⭐ `2.0-31` 的**闸**：**新增的块类型必须同时进 `chunking._ATOMIC`**。
+
+    ⚠️ **为什么这是一条真闸**：没进 `_ATOMIC` 的新块会被并进 text 段，
+    和相邻段落共用同一个 `content` → **那些块的内容变了 → 必须重嵌**。
+    （`2.0-30` 的 `content_hash` 事后能照出来，但那时已经晚了。）
+
+    → **加了新 kind（比如 `2.0-21` 的 `image`）却没改 `_ATOMIC`，这条会直接红。**
+    """
+    from typing import get_args
+
+    from src.document_parser.blocks import BlockKind
+    from src.document_parser.chunking import _ATOMIC
+
+    text_kinds = {"paragraph", "heading"}   # 这两类**本来**就是文本流，允许被合并
+    missing = [k for k in get_args(BlockKind) if k not in text_kinds and k not in _ATOMIC]
+    assert not missing, (
+        f"这些块类型没进 `_ATOMIC`，会被并进 text 段、污染相邻块的 content：{missing}。"
+        f"→ 新 kind 要「成新块」就必须同时加进 `chunking._ATOMIC`（2.0-31）"
+    )
+
+
+def test_atomic_insert_splits_the_text_segment():
+    """⚠️ `2.0-31` 的**代价**：插入原子块会**切断它所在的 text 段**。
+
+    ⚠️ 这条**记录事实，不是期望行为** —— 它纠正一句容易说过头的话：
+
+    > 「独立成新块 → **已有块一个字未变** → **零重嵌**」
+
+    **实测不成立**：不插时，两段短正文被 `split_text` **合并成 1 块**；
+    插了原子块之后，`_segments` 在原子块处 `flush()` → 变成 **2 块** + 1 个原子块。
+    → **被切断的那一段会重新切、要重嵌**（不是零）。
+
+    ✅ **但约束本身仍是对的**：新内容**不许并进已有块的 `content`**
+    （那会让那个块变成"夹着生成内容的杂块"，且**改回来要重嵌全库**）。
+    ⚠️ 真做 `2.0-21` 时：**要么接受这段代价，要么先把"图片块放哪"想清楚再动手。**
+    """
+    before = _doc(_para("第一段正文，足够长以便自成一个块。"), _para("第二段正文。"))
+    after = _doc(_para("第一段正文，足够长以便自成一个块。"),
+                 Block(kind="code", text="print(1)"),
+                 _para("第二段正文。"))
+
+    n_before = [c.text for c in split_blocks(before)]
+    n_after = [c.text for c in split_blocks(after)]
+
+    # 事实一：不插时两段被合并（这正是"切断"会造成变化的根源）
+    assert len(n_before) == 1 and "\n" in n_before[0], f"预期两段被合并，实际 {n_before}"
+    # 事实二：插了之后被切成两块 —— ⚠️ 也就是"零重嵌"这句话在这里**不成立**
+    assert len(n_after) == 3, f"预期被切成 3 块，实际 {n_after}"
+    # 事实三：新块**独立成块**（没被并进邻居）—— 这是 `_ATOMIC` 的功劳
+    assert "print(1)" in {c.text for c in split_blocks(after) if c.kind == "code"}

@@ -29,7 +29,14 @@ from src.document_parser.blocks import Block, ParsedDoc
 from src.document_parser.semantic_splitter import split_text
 from src.document_parser.tables import with_caption
 
-# 整块不切的类型
+# 整块不切的类型。
+#
+# ⭐ `2.0-31`：**这里的名单 = "新增内容能不能零重嵌"的开关**。
+#    进了 `_ATOMIC` 的块**自成一段、自成一块** → 加它**不会改动任何已有块的 `content`**。
+#    ⚠️ 反过来：**新 kind 没进这里**，它就会被并进 text 段、和相邻段落共用 `content`
+#    → **那些块内容变了 → 全得重嵌**（`2.0-30` 的 `content_hash` 会照出来，但已经晚了）。
+#    → 加新 kind 时**两处一起改**：`blocks.BlockKind` + 这里。
+#    🚩 `tests/test_chunking.py::test_new_kind_must_be_atomic` 钉住这条。
 _ATOMIC = ("table", "code")
 
 

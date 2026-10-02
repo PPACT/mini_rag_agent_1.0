@@ -16,6 +16,16 @@ from typing import Literal
 # 段落 / 标题 / 表格 / 代码。
 # ⚠️ 标题**单独一类**不是洁癖：切块级路由要按它做「章节递归切」，
 #    混进 paragraph 就再也认不出来了。
+#
+# ⭐ `2.0-31`（**新增内容必须成「新的块」，不许并进已有块的 `content`**）：
+#    将来加**图片描述**（`2.0-21`）这类新内容时，**必须**：
+#      ① 在这里**新增一个 kind**（如 `"image"`）；
+#      ② **同时**把它加进 `chunking._ATOMIC` —— 否则它会被并进 text 段，
+#         与相邻段落共用一个 `content` → **那些块的内容变了 → 必须重嵌**。
+#    ✅ 独立成块则**已有块一个字未变 → 零重嵌**。
+#    ⚠️ **越晚越贵**：一旦有人先把描述并进 `content`，改回来要**重嵌全库**。
+#    🚩 **闸**：`tests/test_chunking.py::test_new_kind_must_be_atomic`
+#       —— 加了新 kind 却没进 `_ATOMIC` 时它会**直接红**。
 BlockKind = Literal["paragraph", "heading", "table", "code"]
 
 

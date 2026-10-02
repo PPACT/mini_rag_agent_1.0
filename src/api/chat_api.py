@@ -8,6 +8,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from langchain_core.messages import HumanMessage
 
+from src import provenance
 from src.agent.graph_builder import get_agent
 from src.auth.deps import User, get_current_user
 from src.cache.redis_client import get_redis
@@ -65,7 +66,18 @@ def _cache_key(question: str, department: str, secret_level: int, top_k: int, kb
     压测库上传会冲掉真实库的缓存）。**前缀与失效范围必须同构**。
     """
     raw = json.dumps(
-        {"q": question, "d": department, "s": secret_level, "k": top_k, "kb": kb},
+        {"q": question, "d": department, "s": secret_level, "k": top_k, "kb": kb,
+         # ⚠️ `2.0-32`：管道版本必须进键 —— 否则**改了口径、重跑完了，命中的还是旧答案，
+         # 而且不报错**（同类已踩过：`开发记录.md` §4.1 第 6 条）。
+         # ⚠️ 四个**都**要：解析 / 切块 / 清洗 / 嵌入，**任一变都会让检索结果变**。
+         #    （`§1.32` 只列了后三个；`parser_version` 是我加的 —— 改解析器一样会让块变，
+         #     漏了它这里就留一个和它要防的洞一模一样的洞。已报交流区。）
+         # ⚠️ 从 `provenance` **按属性读**（不是 `from … import X`）——
+         #    这样它是"当前的"值，测试也能 monkeypatch 它。
+         "pv": provenance.PARSER_VERSION,
+         "chv": provenance.CHUNKER_VERSION,
+         "cv": provenance.CLEAN_RULES_VERSION,
+         "em": provenance.embedding_id()},
         ensure_ascii=False,
     )
     return f"rag:{kb}:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()

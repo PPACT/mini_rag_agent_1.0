@@ -73,3 +73,36 @@ def test_invalidate_rejects_unknown_kb(monkeypatch):
     monkeypatch.setattr(redis_client, "get_redis", _boom)
     with pytest.raises(UnknownKBError):
         asyncio.run(redis_client.invalidate_cache("real_typo"))
+
+
+# ---------------------------------------------------------------- 2.0-32
+
+
+def test_cache_key_carries_pipeline_versions(monkeypatch):
+    """`2.0-32`：**改任一口径 → 键必须变**。
+
+    ⚠️ 不改的话，后果是**静默的**：重跑完了、口径换了，**命中的还是旧答案，而且不报错**
+    （同类已踩过：`开发记录.md` §4.1 第 6 条）。
+    """
+    from src import provenance
+
+    base = chat_api._cache_key("q", "IT", 3, 10, KB_REAL)
+    for attr in ("PARSER_VERSION", "CHUNKER_VERSION", "CLEAN_RULES_VERSION"):
+        with monkeypatch.context() as m:
+            m.setattr(provenance, attr, "9.9.9")
+            assert chat_api._cache_key("q", "IT", 3, 10, KB_REAL) != base, (
+                f"改了 {attr}，缓存键却没变 —— 旧答案会被继续命中"
+            )
+    with monkeypatch.context() as m:
+        m.setattr(provenance, "embedding_id", lambda: "other-model:512")
+        assert chat_api._cache_key("q", "IT", 3, 10, KB_REAL) != base, "换了嵌入模型，键没变"
+
+
+def test_cache_key_still_isolates_kb_and_permission():
+    """反向用例的**另一面**：加了版本字段**不许把原有的隔离挤掉**。"""
+    base = chat_api._cache_key("q", "IT", 3, 10, KB_REAL)
+    assert base != chat_api._cache_key("q", "IT", 3, 10, KB_STRESS), "两个库共用了缓存"
+    assert base != chat_api._cache_key("q", "HR", 3, 10, KB_REAL), "部门没隔离（越权风险）"
+    assert base != chat_api._cache_key("q", "IT", 9, 10, KB_REAL), "密级没隔离（越权风险）"
+    assert base != chat_api._cache_key("q", "IT", 3, 20, KB_REAL), "top_k 没隔离"
+    assert base != chat_api._cache_key("q2", "IT", 3, 10, KB_REAL), "问题没隔离"

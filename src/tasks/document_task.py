@@ -10,6 +10,7 @@ from src.document_parser.chunking import split_blocks
 from src.document_parser.loader import load_document
 from src.embedding.base import get_embedding
 from src.observability.tracer import audit
+from src.provenance import document_stamps, sha256_text
 from src.vector_store.base import Chunk, get_vector_store
 
 
@@ -76,6 +77,8 @@ async def process_document(
                 page=c.page,
                 raw_table=c.raw_table,
                 table_complex=c.table_complex,
+                # `2.0-30`：块文本哈希 —— 让"改口径后只重嵌变了的块"成为可能
+                content_hash=sha256_text(c.text),
             )
             for i, c in enumerate(chunks)
         ]
@@ -83,10 +86,26 @@ async def process_document(
         store = get_vector_store(kb)
         await store.replace_document(document_id, chunk_objs, vectors)
 
+        # `2.0-30`：把**这次实际用的管道口径**落到文档行上。
+        # ⚠️ 两条入库路径都调 `provenance.document_stamps`（一处定义，别各写一份）。
+        # ⚠️ `content_status` **这里不动** —— 它是"还算不算数"的标记，
+        #    重跑一份文档不代表它自动变成"当前口径该留的"（那要等 `2.0-5` 那批再定语义）。
+        stamps = document_stamps(file_path)
         await pool.execute(
-            "UPDATE documents SET status='completed', chunk_count=$2, updated_at=now() WHERE id=$1::uuid",
+            """
+            UPDATE documents
+               SET status='completed', chunk_count=$2, updated_at=now(),
+                   source_hash=$3, parser_version=$4, clean_rules_version=$5,
+                   chunker_version=$6, embedding_model=$7
+             WHERE id=$1::uuid
+            """,
             document_id,
             len(chunks),
+            stamps["source_hash"],
+            stamps["parser_version"],
+            stamps["clean_rules_version"],
+            stamps["chunker_version"],
+            stamps["embedding_model"],
         )
         await invalidate_cache(kb)   # D9-⑦：只清**本库**的问答缓存，不波及另一个库
     except Exception as e:  # noqa: BLE001

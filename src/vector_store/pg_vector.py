@@ -203,9 +203,10 @@ class PgVectorStore(VectorStore):
                         INSERT INTO chunks (document_id, chunk_index, document_version,
                                             content, embedding, department, secret_level, source_file,
                                             start_offset, end_offset, title,
-                                            page, raw_table, table_complex, content_tsv)
+                                            page, raw_table, table_complex, content_tsv,
+                                            content_hash, table_id, image_path)
                         VALUES ($1::uuid, $2, $3, $4, $5::vector, $6, $7, $8, $9, $10, $11,
-                                $12, $13, $14, to_tsvector('simple', $15))
+                                $12, $13, $14, to_tsvector('simple', $15), $16, $17, $18)
                         """,
                         chunk.document_id,
                         chunk.chunk_index,
@@ -239,6 +240,10 @@ class PgVectorStore(VectorStore):
                         #
                         # 中文需 Python 侧分词后再交给 tsvector。
                         tokenize(chunk.content + ("\n" + chunk.raw_table if chunk.raw_table else "")),
+                        # `2.0-30`：内容哈希（只重嵌变了的块）+ 两个预留列
+                        chunk.content_hash,
+                        chunk.table_id,
+                        chunk.image_path,
                     )
 
     async def delete_by_document(self, document_id: str) -> None:

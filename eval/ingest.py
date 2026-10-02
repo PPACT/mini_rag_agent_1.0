@@ -20,6 +20,7 @@ from src.document_parser.chunking import split_blocks  # noqa: E402
 from src.document_parser.loader import load_document  # noqa: E402
 from src.document_parser.routing import DocumentParseError, failure_report  # noqa: E402
 from src.embedding.base import get_embedding  # noqa: E402
+from src.provenance import document_stamps, sha256_text  # noqa: E402
 from src.vector_store.base import Chunk, get_vector_store  # noqa: E402
 
 CORPUS_DIR = Path(__file__).resolve().parent / "corpus"
@@ -128,25 +129,39 @@ async def ingest(exclude_dept: bool = False, dirs: list[Path] | None = None,
                 page=c.page,
                 raw_table=c.raw_table,
                 table_complex=c.table_complex,
+                # `2.0-30`：与生产入库路径**同一处**算（`provenance.sha256_text`）
+                content_hash=sha256_text(c.text),
             )
             for j, c in enumerate(chunks)
         ]
 
         # 这条路径 filename 本来就是真文件名，故 original_name 与它一致 ——
         # 让「上传」与「评测灌库」两条入库路径语义对齐（D9-③）。
+        # `2.0-30`：版本戳与生产路径**同一处**算（`provenance.document_stamps`）
+        stamps = document_stamps(path)
         await pool.execute(
             """
-            INSERT INTO documents (id, filename, original_name, status, chunk_count)
-            VALUES ($1::uuid, $2, $2, 'completed', $3)
+            INSERT INTO documents (id, filename, original_name, status, chunk_count,
+                                   source_hash, parser_version, clean_rules_version,
+                                   chunker_version, embedding_model)
+            VALUES ($1::uuid, $2, $2, 'completed', $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO UPDATE
               SET filename = EXCLUDED.filename,
                   original_name = EXCLUDED.original_name,
                   status = 'completed',
                   chunk_count = EXCLUDED.chunk_count,
+                  source_hash = EXCLUDED.source_hash,
+                  parser_version = EXCLUDED.parser_version,
+                  clean_rules_version = EXCLUDED.clean_rules_version,
+                  chunker_version = EXCLUDED.chunker_version,
+                  embedding_model = EXCLUDED.embedding_model,
                   is_deleted = false,
                   updated_at = now()
             """,
             doc_id, filename, len(chunks),
+            stamps["source_hash"], stamps["parser_version"],
+            stamps["clean_rules_version"], stamps["chunker_version"],
+            stamps["embedding_model"],
         )
         await store.replace_document(doc_id, chunk_objs, vectors)
         total_chunks += len(chunks)

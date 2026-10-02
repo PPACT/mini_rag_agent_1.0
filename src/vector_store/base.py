@@ -48,6 +48,20 @@ class Chunk:
     """
 
     table_complex: bool = False
+
+    # ---- `2.0-30` 版本戳 / 内容哈希（迁移 0006）----
+    content_hash: str | None = None
+    """块文本（`content`）的 sha256 —— **只重嵌变了的块**的依据。
+
+    ⚠️ 只算 `content`、**不算 `raw_table`**：向量只吃 `content`（`2.0-1` 口径），
+    所以"要不要重嵌"也只该看它。计算见 `src/provenance.sha256_text`。
+    """
+
+    table_id: str | None = None
+    """同一张表被拆成多块时的归组键（**`2.0-1` 占用，本轮只留位置**）。"""
+
+    image_path: str | None = None
+    """图片块的落盘位置（**`2.0-21` 占用，本轮只留位置**）。"""
     """复杂表（嵌套表头 / 多级合并）→ 其**原表也进向量**。是"这类"进，不是全局都进。"""
 
     id: str | None = None          # 检索结果回填；写入时为空

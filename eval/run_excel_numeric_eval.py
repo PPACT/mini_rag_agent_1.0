@@ -41,6 +41,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from eval.l0_report import pct_nearest_rank  # noqa: E402
 from src.config.settings import get_settings  # noqa: E402
@@ -52,7 +53,7 @@ from src.rag.retriever import retrieve  # noqa: E402
 from src.vector_store.base import Chunk  # noqa: E402
 
 DATASET = Path(__file__).resolve().parent / "dataset_excel_numeric.jsonl"
-CORPUS = Path(__file__).resolve().parents[1] / "docs" / "corpus"
+CORPUS = CORPUS_DIR
 EVAL_DEPARTMENT = ["IT", "公司"]
 EVAL_SECRET_LEVEL = 3
 KS = (1, 3, 5)

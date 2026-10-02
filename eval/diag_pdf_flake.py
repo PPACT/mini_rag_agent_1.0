@@ -21,7 +21,7 @@
 
 用法：
     python eval/diag_pdf_flake.py                      # 默认 30 次
-    python eval/diag_pdf_flake.py --runs 50 --file docs/corpus/03_考勤与休假管理规定.pdf
+    python eval/diag_pdf_flake.py --runs 50 --file docs/local/corpus/03_考勤与休假管理规定.pdf
 """
 from __future__ import annotations
 
@@ -35,10 +35,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from src.document_parser.routing import parse_document  # noqa: E402
 
-DEFAULT_FILE = ROOT / "docs" / "corpus" / "03_考勤与休假管理规定.pdf"
+DEFAULT_FILE = CORPUS_DIR / "03_考勤与休假管理规定.pdf"
 
 
 def _signature(exc: BaseException) -> str:
@@ -86,7 +87,7 @@ def main() -> int:
     ap.add_argument("--fresh-procs", type=int, default=10,
                     help="额外用**新进程**跑几次（分辨进程内状态影响）")
     ap.add_argument("--corpus-runs", type=int, default=0,
-                    help="额外：把 docs/corpus **整批**解析 N 遍 —— 贴近真实的 ingest 条件")
+                    help="额外：把 docs/local/corpus **整批**解析 N 遍 —— 贴近真实的 ingest 条件")
     args = ap.parse_args()
 
     path = Path(args.file)
@@ -132,8 +133,8 @@ def main() -> int:
     corpus_total: Counter[str] = Counter()
     corpus_sigs: Counter[str] = Counter()
     if args.corpus_runs:
-        files = sorted(p for p in (ROOT / "docs" / "corpus").iterdir() if p.is_file())
-        print(f"\n【整批模式】docs/corpus 全量解析 {args.corpus_runs} 遍（{len(files)} 个文件/遍）")
+        files = sorted(p for p in (CORPUS_DIR).iterdir() if p.is_file())
+        print(f"\n【整批模式】docs/local/corpus 全量解析 {args.corpus_runs} 遍（{len(files)} 个文件/遍）")
         for r in range(1, args.corpus_runs + 1):
             for f in files:
                 corpus_total[f.name] += 1

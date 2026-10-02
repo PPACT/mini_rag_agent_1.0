@@ -22,7 +22,7 @@
 ## ⚠️ 评测集**不入库** —— 它的内容就是真实语料原文
 
 落点：`eval/local/dataset_pdf_numeric.jsonl`（`eval/local/` 已 gitignore）。
-**协议 §12.5：语料绝不外传**；且 `docs/corpus/` 本身不入库 →
+**协议 §12.5：语料绝不外传**；且 `docs/local/corpus/` 本身不入库 →
 **新克隆跑不了这个评测**，提交评测集换不来可复现性，只换来泄露。
 
 每行一题（JSONL）：
@@ -50,6 +50,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from src.db.connection import close_pool  # noqa: E402
 from src.db.kb import KB_STRESS  # noqa: E402
@@ -60,7 +61,7 @@ from src.vector_store.base import Chunk  # noqa: E402
 #    `eval/local/` 是一条**目录规则**（fail-closed）：以后同类的评测集丢进去就自动忽略，
 #    不会因为"忘了加一行精确路径"而静默泄漏。
 DATASET = Path(__file__).resolve().parent / "local" / "dataset_pdf_numeric.jsonl"
-CORPUS = str(ROOT / "docs" / "corpus")
+CORPUS = str(CORPUS_DIR)
 EVAL_DEPARTMENT = ["IT", "公司"]
 EVAL_SECRET_LEVEL = 3
 KS = (1, 3, 5)

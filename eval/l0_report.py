@@ -18,7 +18,7 @@
 | **每份文档实际生效的解析器** | 路由 vs 实际（协议 P-2） |
 
 用法：
-    python eval/l0_report.py                        # 默认扫 docs/corpus
+    python eval/l0_report.py                        # 默认扫 docs/local/corpus
     python eval/l0_report.py --dir eval/corpus      # 换目录
     python eval/l0_report.py --no-detail            # 不打印逐文件表
 """
@@ -32,6 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from src.config.settings import get_settings  # noqa: E402
 from src.document_parser.chunking import split_blocks  # noqa: E402
@@ -131,7 +132,7 @@ def _fmt_row(r: dict) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
+    ap.add_argument("--dir", default=str(CORPUS_DIR))
     ap.add_argument("--json", default=str(OUT_DEFAULT))
     ap.add_argument("--no-detail", action="store_true")
     args = ap.parse_args()

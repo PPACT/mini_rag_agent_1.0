@@ -14,7 +14,7 @@
 **而评估是另一条命令**，它不会告诉你"库里少了谁"。**这就是静默的来源。**
 
 用法（**评估前跑**）：
-    python eval/check_ingest_complete.py --kb stress --dir docs/corpus
+    python eval/check_ingest_complete.py --kb stress --dir docs/local/corpus
 退出码非 0 = **不完整**，别拿它做评估。
 """
 from __future__ import annotations
@@ -26,6 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from src.db.connection import close_pool, get_pool  # noqa: E402
 
@@ -44,7 +45,7 @@ def compare(corpus: set[str], in_db: set[str]) -> dict[str, list[str]]:
 def split_by_routing(files: list[Path]) -> tuple[set[str], set[str]]:
     """把语料分成「**路由认得的**」与「**路由明确拒收的**」。
 
-    ⭐ **这一步不做，闸就是废的**：`docs/corpus` 里有一份 `.html`，
+    ⭐ **这一步不做，闸就是废的**：`docs/local/corpus` 里有一份 `.html`，
     而 `routing` **明确拒收 HTML**（`2.0-40` 未接入）——
     不把它摘出去，这个闸**每次都报"不完整"** → **永远红 = 和永远绿一样没用**。
 
@@ -96,7 +97,7 @@ async def check(kb: str, directory: str) -> dict:
 async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kb", required=True)
-    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
+    ap.add_argument("--dir", default=str(CORPUS_DIR))
     args = ap.parse_args()
 
     from src.db.kb import validate

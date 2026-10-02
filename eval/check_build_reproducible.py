@@ -25,7 +25,7 @@
 指纹一致 ⇔ 没有任何块需要重嵌 ⇔ **构建可复现**。
 
 用法：
-    python eval/check_build_reproducible.py --runs 5 --kb stress --dir docs/corpus
+    python eval/check_build_reproducible.py --runs 5 --kb stress --dir docs/local/corpus
 """
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from src.db.connection import close_pool, get_pool  # noqa: E402
 
@@ -73,7 +74,7 @@ async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--kb", default="stress")
-    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
+    ap.add_argument("--dir", default=str(CORPUS_DIR))
     ap.add_argument("--json", default=str(ROOT / "logs" / "build_reproducible.json"))
     ap.add_argument("--until-failure", action="store_true",
                     help="一直跑到**抓住一次失败**（或到 --max-runs）—— 失败率低时不必靠运气")

@@ -17,7 +17,7 @@
 
 用法：
     python eval/probe_pdf_text_order.py
-    python eval/probe_pdf_text_order.py --dir docs/corpus --json logs/pdf_text_order.json
+    python eval/probe_pdf_text_order.py --dir docs/local/corpus --json logs/pdf_text_order.json
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 import pdfplumber  # noqa: E402
 
@@ -67,7 +68,7 @@ def _scan(path: Path) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
+    ap.add_argument("--dir", default=str(CORPUS_DIR))
     ap.add_argument("--json", default=str(ROOT / "logs" / "pdf_text_order.json"))
     args = ap.parse_args()
 

@@ -30,7 +30,7 @@ COMPANY_SCOPE = "公司"     # 基础文档与通用文档：全员可见
 EVAL_SECRET_LEVEL = 3
 
 # 认识的扩展名。默认那两个目录里只有 .md/.txt，所以**加长这份清单不改变默认行为**；
-# 它存在的意义是 `--dir docs/corpus` 时能收真实语料（pdf/docx/xlsx/...）。
+# 它存在的意义是 `--dir docs/local/corpus` 时能收真实语料（pdf/docx/xlsx/...）。
 # ⚠️ `.html` 会**显式失败**（`2.0-40` 未接入）—— 这不藏，让它进失败清单。
 _SUFFIXES = (".md", ".txt", ".pdf", ".docx", ".xlsx", ".pptx", ".csv", ".py", ".html")
 
@@ -56,7 +56,7 @@ def collect_files(exclude_dept: bool, dirs: list[Path] | None = None) -> list[Pa
     """收集语料文件。`exclude_dept=True` 时剔除部门变体（得到「干净语料」）。
 
     `dirs` 不给 = 默认那两份合成语料目录（**行为不变**）；
-    给了就用它 —— 例如 `--dir docs/corpus` 灌真实语料（`2.0-47`）。
+    给了就用它 —— 例如 `--dir docs/local/corpus` 灌真实语料（`2.0-47`）。
     """
     files: list[Path] = []
     for d in (dirs if dirs is not None else [CORPUS_DIR, SYNTH_DIR]):

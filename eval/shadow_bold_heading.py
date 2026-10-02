@@ -36,7 +36,7 @@
 
 用法：
     python eval/shadow_bold_heading.py
-    python eval/shadow_bold_heading.py --dir docs/corpus --json logs/shadow_bold_heading.json
+    python eval/shadow_bold_heading.py --dir docs/local/corpus --json logs/shadow_bold_heading.json
 """
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from src.config.settings import get_settings  # noqa: E402
 from src.document_parser.chunking import split_blocks  # noqa: E402
@@ -130,7 +131,7 @@ def _measure(path: Path, chunk_size: int, overlap: int) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
+    ap.add_argument("--dir", default=str(CORPUS_DIR))
     ap.add_argument("--json", default=str(OUT_DEFAULT))
     args = ap.parse_args()
 

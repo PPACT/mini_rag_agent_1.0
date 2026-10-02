@@ -35,7 +35,7 @@
 
 用法：
     python eval/probe_docx_heading.py
-    python eval/probe_docx_heading.py --dir docs/corpus --json logs/probe_docx_heading.json
+    python eval/probe_docx_heading.py --dir docs/local/corpus --json logs/probe_docx_heading.json
 """
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ from docx.oxml.ns import qn
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from eval.paths import CORPUS_DIR  # noqa: E402
 
 from src.config.settings import get_settings  # noqa: E402
 from src.document_parser.chunking import split_blocks  # noqa: E402
@@ -268,7 +269,7 @@ def _brief(p: dict) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
+    ap.add_argument("--dir", default=str(CORPUS_DIR))
     ap.add_argument("--json", default=str(OUT_DEFAULT))
     args = ap.parse_args()
 

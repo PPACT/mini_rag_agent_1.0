@@ -64,21 +64,20 @@ def split_by_routing(files: list[Path]) -> tuple[set[str], set[str]]:
     return known, unsupported
 
 
-async def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--kb", required=True)
-    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
-    args = ap.parse_args()
+async def check(kb: str, directory: str) -> dict:
+    """闸的核心 —— **抽出来是给别的脚本复用的**（评估前必须过）。
 
-    from src.db.kb import validate
-    validate(args.kb)
-    # ⭐ 复用**同一条**语料收集逻辑（含扩展名清单）—— 不另写一份
+    ⚠️ 为什么不只是"文档里写一句'评估前记得跑"：
+    **记在文档里的规矩拦不住遗忘**（本项目已踩过：`优化方案.md` 早写了 `use_hybrid` 的坑，
+    照样又踩一次）→ **让评估脚本自己调它**，才真的忘不掉。
+    """
     from eval.ingest import collect_files
 
-    files = collect_files(False, [Path(args.dir)])
-    corpus, unsupported = split_by_routing(files)   # ⚠️ 路由拒收的不参与判定
+    corpus_dir = Path(directory)
+    files = collect_files(False, [corpus_dir])
+    corpus, unsupported = split_by_routing(files)
 
-    pool = await get_pool(args.kb)
+    pool = await get_pool(kb)
     try:
         rows = await pool.fetch(
             "SELECT COALESCE(original_name, filename) AS n, chunk_count FROM documents "
@@ -87,31 +86,45 @@ async def main() -> int:
         await close_pool()
 
     in_db = {r["n"] for r in rows}
-    empty = sorted(r["n"] for r in rows if not r["chunk_count"])
-    diff = compare(corpus, in_db)
+    return {
+        "files": len(files), "known": len(corpus), "unsupported": sorted(unsupported),
+        "in_db": len(in_db), "empty": sorted(r["n"] for r in rows if not r["chunk_count"]),
+        **compare(corpus, in_db),
+    }
 
-    print(f"灌库完整性 ｜ kb={args.kb} ｜ 语料 {len(files)} 个文件"
-          f"（路由认得 {len(corpus)} / 明确拒收 {len(unsupported)}）｜ 库中 {len(in_db)} 份文档")
-    if unsupported:
+
+async def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--kb", required=True)
+    ap.add_argument("--dir", default=str(ROOT / "docs" / "corpus"))
+    args = ap.parse_args()
+
+    from src.db.kb import validate
+    validate(args.kb)
+
+    r = await check(args.kb, args.dir)
+    print(f"灌库完整性 ｜ kb={args.kb} ｜ 语料 {r['files']} 个文件"
+          f"（路由认得 {r['known']} / 明确拒收 {len(r['unsupported'])}）｜ 库中 {r['in_db']} 份文档")
+    if r["unsupported"]:
         # ⚠️ **不是"丢了"，是"路由不认这个格式"** —— 分开报，免得跟真丢的混在一起
-        print(f"  ⏭️ 路由明确拒收（预期跳过，不算失败）：{', '.join(sorted(unsupported))}")
+        print(f"  ⏭️ 路由明确拒收（预期跳过，不算失败）：{', '.join(r['unsupported'])}")
     for key, bad, good, what in (
         ("missing", "❌ 丢了（语料里有、库里没有）", "✅ 没丢", "语料里的文件都在库里"),
         ("unexpected", "⚠️ 多出来（库里有、语料目录里没有）", "✅ 没多", "库里没有语料之外的文件"),
     ):
-        if diff[key]:
-            print(f"\n{bad}：{len(diff[key])}")
-            for n in diff[key]:
+        if r[key]:
+            print(f"\n{bad}：{len(r[key])}")
+            for n in r[key]:
                 print(f"    {n}")
         else:
             print(f"  {good}：{what}")
 
-    if empty:
-        print(f"\n⚠️ 入库但**块数为 0** 的：{len(empty)}")
-        for n in empty:
+    if r["empty"]:
+        print(f"\n⚠️ 入库但**块数为 0** 的：{len(r['empty'])}")
+        for n in r["empty"]:
             print(f"    {n}")
 
-    ok = not diff["missing"] and not diff["unexpected"] and not empty
+    ok = not r["missing"] and not r["unexpected"] and not r["empty"]
     print("\n" + ("✅ 完整 —— 可以拿这个库做评估"
                   if ok else "❌ **不完整** —— ⚠️ 先别用它做评估，数字会解释不通"))
     return 0 if ok else 1
